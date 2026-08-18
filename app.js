@@ -129,7 +129,7 @@ function paintIcons(root) {
 
 /* ═══ 1. TRẠNG THÁI & LƯU TRỮ ════════════════════════════════════ */
 
-const K = { lessons: 'hsk.lessons', cfg: 'hsk.cfg', words: 'hsk.words', prog: 'hsk.prog', log: 'hsk.log', queue: 'hsk.queue', meta: 'hsk.meta', lookup: 'hsk.lookup', rads: 'hsk.rads' };
+const K = { gram: 'hsk.gram', lessons: 'hsk.lessons', cfg: 'hsk.cfg', words: 'hsk.words', prog: 'hsk.prog', log: 'hsk.log', queue: 'hsk.queue', meta: 'hsk.meta', lookup: 'hsk.lookup', rads: 'hsk.rads' };
 
 /* Các mục app hiểu được. hints = từ khoá để tự đoán cột khi đọc Sheet */
 const FIELDS = [
@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '18';
+const APP_VER = '21';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -168,12 +168,13 @@ const PRESET = {
     viDu: 'Đặt câu', ghiChu: 'Cách nhớ chữ', audio: 'Audio'
   },
   groupBy: ['Chủ đề', 'HSK', 'Từ loại', 'Bộ thủ'],
-  lessonTab: 'Bài khoá'
+  lessonTab: 'Bài khoá',
+  gramTab: 'Ngữ pháp'
 };
 
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
-  map: {}, cols: [], groupBy: [], lessonTab: '',
+  map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '',
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
   settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto' }
 };
@@ -181,7 +182,7 @@ const DEFAULT_CFG = {
 const state = {
   cfg: null, words: [], prog: {}, log: {}, queue: [], meta: {},
   demo: false, view: 'kho', sess: null, detailIdx: -1, filtered: [],
-  mode: 'tu', rads: [], radIndex: {}, radByChar: {}, radCols: {}, pins: [], lessons: []
+  mode: 'tu', rads: [], radIndex: {}, radByChar: {}, radCols: {}, pins: [], lessons: [], gram: []
 };
 
 const LS = {
@@ -202,12 +203,13 @@ function loadState() {
   state.radByChar = {};
   state.rads.forEach(r => state.radByChar[r.f.hanzi] = r);
   state.lessons = LS.get(K.lessons, []);
+  state.gram = LS.get(K.gram, []);
   state.words = LS.get(K.words, []);
   state.prog  = LS.get(K.prog, {});
   state.log   = LS.get(K.log, {});
   state.queue = LS.get(K.queue, []);
   state.meta  = LS.get(K.meta, {});
-  state.mode  = ['bo', 'py', 'bk'].indexOf(state.meta.mode) > -1 ? state.meta.mode : 'tu';
+  state.mode  = ['bo', 'py', 'bk', 'np'].indexOf(state.meta.mode) > -1 ? state.meta.mode : 'tu';
   // chưa từng khai báo gì -> lấy cấu hình nhúng sẵn
   if (!state.cfg.sheetId && PRESET.sheetId) {
     state.cfg.sheetUrl = PRESET.sheetUrl;
@@ -216,6 +218,7 @@ function loadState() {
     state.cfg.map = Object.assign({}, PRESET.map);
     state.cfg.groupBy = PRESET.groupBy.slice();
     state.cfg.lessonTab = PRESET.lessonTab || '';
+    state.cfg.gramTab = PRESET.gramTab || '';
     saveCfg();
   }
   // Cấu hình đã lưu từ bản app cũ sẽ thiếu những khoá mới thêm về sau.
@@ -223,6 +226,10 @@ function loadState() {
   if (state.cfg.sheetId && state.cfg.sheetId === PRESET.sheetId) {
     if (!state.cfg.lessonTab && PRESET.lessonTab) {
       state.cfg.lessonTab = PRESET.lessonTab;
+      saveCfg();
+    }
+    if (!state.cfg.gramTab && PRESET.gramTab) {
+      state.cfg.gramTab = PRESET.gramTab;
       saveCfg();
     }
   }
@@ -1322,6 +1329,68 @@ async function loadLessons(silent) {
   return state.lessons;
 }
 
+/* Ngữ pháp gọn hơn bài khoá: mỗi mục nằm trọn một dòng, ba ô Cấu trúc /
+   Ví dụ / Lưu ý xuống dòng bên trong để liệt kê. Riêng ô Ví dụ ngăn bằng
+   dấu | theo thứ tự Hán · pinyin · nghĩa, tách ra mới gắn được nút loa. */
+const GRAM_FIELDS = [
+  { key: 'stt',    hints: ['stt', 'số thứ tự'] },
+  { key: 'ten',    hints: ['tên mục', 'ten muc', 'tên', 'mục', 'chủ điểm', 'tên bài'] },
+  { key: 'hsk',    hints: ['hsk', 'cấp'] },
+  { key: 'han',    hints: ['chữ hán', 'hán', 'chinese'] },
+  { key: 'pinyin', hints: ['pinyin', 'phiên âm'] },
+  { key: 'nghia',  hints: ['nghĩa', 'tiếng việt', 'dịch'] },
+  { key: 'ct',     hints: ['cấu trúc', 'cau truc', 'công thức', 'structure'] },
+  { key: 'vd',     hints: ['ví dụ', 'vi du', 'example', 'câu mẫu'] },
+  { key: 'ly',     hints: ['lưu ý', 'luu y', 'ghi chú', 'note'] }
+];
+
+function dongTrongO(v) {
+  return String(v == null ? '' : v).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+}
+
+function buildGram(table) {
+  const m = guessCols(table.cols, GRAM_FIELDS);
+  const out = [];
+  table.rows.forEach((r, i) => {
+    const raw = {};
+    table.cols.forEach((c, j) => { if (c) raw[c] = r[j] == null ? '' : r[j]; });
+    const g = k => (m[k] ? String(raw[m[k]] || '').trim() : '');
+    const ten = g('ten'), han = g('han');
+    if (!ten && !han) return;
+    out.push({
+      id: String(raw.id || raw.ID || ('NP-' + (i + 1))),
+      stt: parseFloat(g('stt')) || (i + 1),
+      ten: ten || han,
+      hsk: g('hsk') || 'Khác',
+      han: han, pinyin: g('pinyin'), nghia: g('nghia'),
+      // "Khẳng định: S + 有 + N" -> tách nhãn ra cho dễ đọc
+      ct: dongTrongO(g('ct')).map(t => {
+        const k = t.indexOf(':');
+        return (k > 0 && k < 24)
+          ? { nhan: t.slice(0, k).trim(), mau: t.slice(k + 1).trim() }
+          : { nhan: '', mau: t };
+      }),
+      vd: dongTrongO(g('vd')).map(t => {
+        const q = t.split('|').map(x => x.trim());
+        return { han: q[0] || '', pinyin: q[1] || '', viet: q[2] || '' };
+      }).filter(x => x.han),
+      ly: dongTrongO(g('ly'))
+    });
+  });
+  out.sort((a, b) => String(a.hsk).localeCompare(String(b.hsk), 'vi') || a.stt - b.stt);
+  return out;
+}
+
+async function loadGram(silent) {
+  const tab = (state.cfg.gramTab || '').trim();
+  if (!tab || !state.cfg.sheetId) return null;
+  const t = await readSheet(state.cfg.sheetId, tab, '');
+  state.gram = buildGram(t);
+  LS.set(K.gram, state.gram);
+  if (!silent) toast('Đã nạp ' + state.gram.length + ' mục ngữ pháp', 'ok');
+  return state.gram;
+}
+
 function curList() {
   if (state.mode === 'bo') return state.rads;
   if (state.mode === 'py') return state.pins;
@@ -1441,16 +1510,23 @@ function filterWords() {
 }
 function renderKho() {
   const seg = $('#segMode');
-  seg.hidden = !state.rads.length && !state.pins.length && !state.lessons.length;
+  seg.hidden = !state.rads.length && !state.pins.length && !state.lessons.length && !state.gram.length;
   const segBo = $('.seg__btn[data-mode="bo"]', seg); if (segBo) segBo.hidden = !state.rads.length;
   const segPy = $('.seg__btn[data-mode="py"]', seg); if (segPy) segPy.hidden = !state.pins.length;
   const segBk = $('.seg__btn[data-mode="bk"]', seg);
   if (segBk) segBk.hidden = !state.lessons.length && state.mode !== 'bk';
+  const segNp = $('.seg__btn[data-mode="np"]', seg);
+  if (segNp) segNp.hidden = !state.gram.length && state.mode !== 'np';
   $$('.seg__btn', seg).forEach(b => b.classList.toggle('is-on', b.getAttribute('data-mode') === state.mode));
-  const isBk = state.mode === 'bk';
-  $('.toolbar__row').hidden = isBk;
-  $('.search').hidden = isBk;
-  if (isBk) { $('#khoMeta').textContent = ''; renderLessons(); return; }
+  // hai kho này không lọc/tìm theo từ nên giấu luôn thanh công cụ
+  const isBk = state.mode === 'bk', isNp = state.mode === 'np';
+  $('.toolbar__row').hidden = isBk || isNp;
+  $('.search').hidden = isBk || isNp;
+  if (isBk || isNp) {
+    $('#khoMeta').textContent = '';
+    if (isBk) renderLessons(); else renderGram();
+    return;
+  }
   $('.toolbar__row').hidden = false;
   $('.search').hidden = false;
   fillGroupSelect();
@@ -1618,7 +1694,8 @@ function openLesson(L) {
 }
 
 /* Đọc lần lượt cả bài, tô sáng câu đang đọc; bấm lần nữa thì dừng */
-function togglePlayAll(L, btn) {
+function togglePlayAll(L, btn, nhan) {
+  nhan = nhan || 'Nghe cả bài';
   const rows = $$('.dlg__row');
   const mark = i => rows.forEach((r, k) => r.classList.toggle('is-play', k === i));
   const setLabel = (ico, txt) => {
@@ -1627,15 +1704,125 @@ function togglePlayAll(L, btn) {
     btn.appendChild(document.createTextNode(txt));
   };
   if (btn.dataset.on === '1') {
-    stopSpeak(); btn.dataset.on = ''; mark(-1); setLabel('volume', 'Nghe cả bài');
+    stopSpeak(); btn.dataset.on = ''; mark(-1); setLabel('volume', nhan);
     return;
   }
   btn.dataset.on = '1';
   setLabel('x', 'Dừng');
   speakSeq(L.lines.map(x => x.han), i => {
     mark(i);
-    if (i === -1) { btn.dataset.on = ''; setLabel('volume', 'Nghe cả bài'); }
+    if (i === -1) { btn.dataset.on = ''; setLabel('volume', nhan); }
   });
+}
+
+/* Mỗi mục ngữ pháp là một thẻ, xếp nhóm theo cấp HSK */
+function renderGram() {
+  const box = $('#khoList');
+  box.innerHTML = '';
+  if (!state.gram.length) {
+    const dangTai = !!(state.cfg.gramTab || '').trim();
+    box.appendChild(el('div', { class: 'empty' }, [
+      el('div', { class: 'empty__ico' }, [icon(dangTai ? 'refresh' : 'inbox', 38)]),
+      el('h3', { text: dangTai ? 'Đang tải ngữ pháp…' : 'Chưa có ngữ pháp' }),
+      el('p', { text: dangTai
+        ? 'Đợi lần đồng bộ đầu tiên xong là hiện.'
+        : 'Thêm tab "Ngữ pháp" vào Google Sheet rồi bấm Đồng bộ.' })
+    ]));
+    return;
+  }
+  const byHsk = {};
+  state.gram.forEach(g => { (byHsk[g.hsk] = byHsk[g.hsk] || []).push(g); });
+
+  Object.keys(byHsk).sort().forEach(h => {
+    const grp = el('div', { class: 'group' });
+    grp.appendChild(el('div', { class: 'group__head' }, [
+      el('span', { class: 'group__caret' }, [icon('down', 12)]),
+      el('span', { class: 'group__name', text: h }),
+      el('span', { class: 'group__count', text: byHsk[h].length + ' mục' })
+    ]));
+    const grid = el('div', { class: 'grid' });
+    byHsk[h].forEach(G => grid.appendChild(el('div', {
+      class: 'gcard', onclick: () => openGram(G)
+    }, [
+      G.han ? el('button', {
+        class: 'wcard__spk', title: 'Phát âm',
+        onclick: e => { e.stopPropagation(); speak(G.han); }
+      }, [icon('volume', 13)]) : null,
+      el('div', { class: 'gcard__han', text: G.han || '语' }),
+      G.pinyin ? el('div', { class: 'gcard__py', text: G.pinyin }) : null,
+      el('div', { class: 'gcard__vi', text: G.nghia || G.ten }),
+      el('div', { class: 'gcard__n', text: G.vd.length + ' ví dụ' })
+    ])));
+    grp.appendChild(grid);
+    box.appendChild(grp);
+  });
+}
+
+/* Mở một mục: Cấu trúc → Ví dụ (có loa từng câu) → Lưu ý */
+function openGram(G) {
+  closeAllModals();
+  stopSpeak();
+  const body = el('div', { class: 'gram' });
+
+  if (G.han || G.pinyin || G.nghia) {
+    body.appendChild(el('div', { class: 'gram__top' }, [
+      G.han ? el('div', { class: 'gram__han', text: G.han }) : null,
+      el('div', { class: 'gram__khoi' }, [
+        G.pinyin ? el('div', { class: 'gram__py', text: G.pinyin }) : null,
+        G.nghia ? el('div', { class: 'gram__vi', text: G.nghia }) : null
+      ]),
+      G.han ? el('button', {
+        class: 'dlg__spk', title: 'Phát âm',
+        onclick: () => { stopSpeak(); speak(G.han); }
+      }, [icon('volume', 16)]) : null
+    ]));
+  }
+
+  const muc = (ten, node) => {
+    body.appendChild(el('div', { class: 'sechead', text: ten }));
+    body.appendChild(node);
+  };
+
+  if (G.ct.length) {
+    const b = el('div', { class: 'gct' });
+    G.ct.forEach(c => b.appendChild(el('div', { class: 'gct__row' }, [
+      c.nhan ? el('span', { class: 'gct__nhan', text: c.nhan }) : null,
+      el('span', { class: 'gct__mau', text: c.mau })
+    ])));
+    muc('Cấu trúc', b);
+  }
+
+  if (G.vd.length) {
+    const b = el('div', { class: 'dlg' });
+    G.vd.forEach(v => b.appendChild(el('div', { class: 'dlg__row' }, [
+      el('div', { class: 'dlg__txt' }, [
+        el('div', { class: 'dlg__han', text: v.han }),
+        v.pinyin ? el('div', { class: 'dlg__py', text: v.pinyin }) : null,
+        v.viet ? el('div', { class: 'dlg__vi', text: v.viet }) : null
+      ]),
+      el('button', {
+        class: 'dlg__spk', title: 'Nghe câu này',
+        onclick: e => { e.stopPropagation(); stopSpeak(); speak(v.han); }
+      }, [icon('volume', 16)])
+    ])));
+    muc('Ví dụ', b);
+  }
+
+  if (G.ly.length) {
+    const b = el('ul', { class: 'gly' });
+    G.ly.forEach(t => b.appendChild(el('li', { text: t })));
+    muc('Lưu ý', b);
+  }
+
+  let close;
+  const btnAll = G.vd.length
+    ? el('button', { class: 'btn', onclick: () => togglePlayAll({ lines: G.vd }, btnAll, 'Nghe ví dụ') },
+         [icon('volume'), 'Nghe ví dụ'])
+    : null;
+  close = modalShell(G.ten, body, [
+    btnAll,
+    el('button', { class: 'btn', onclick: () => close() }, ['Đóng'])
+  ].filter(Boolean)).close;
 }
 
 function gridOf(words) {
@@ -2255,6 +2442,7 @@ function paintSyncInfo() {
   bit.push(state.words.length + ' từ');
   if (state.rads.length) bit.push(state.rads.length + ' bộ thủ');
   if (state.lessons.length) bit.push(state.lessons.length + ' bài khoá');
+  if (state.gram.length) bit.push(state.gram.length + ' mục ngữ pháp');
   bit.push(state.meta.syncAt ? 'đồng bộ lúc ' + fmtClock(state.meta.syncAt) : 'chưa đồng bộ lần nào');
   if (state.queue.length) bit.push(state.queue.length + ' thay đổi đang chờ đẩy lên');
   n.textContent = bit.join(' · ');
@@ -2541,6 +2729,7 @@ async function doSync(silent) {
     if (hasWrite()) { try { await pullProgress(); } catch (e) {} }
     // bộ thủ nằm ngay trong bảng chính; chỉ khi không có mới đi tìm ở tab riêng
     try { await loadLessons(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
+    try { await loadGram(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
     if (split.rads.length) applyRads(split.rads);
     else if (state.cfg.lookup.tab) { try { state.words = fresh; await loadLookup(true); } catch (e) {} }
 

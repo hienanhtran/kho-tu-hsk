@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 
@@ -45,6 +45,7 @@
         <button class="seg__btn" data-mode="bo">Bộ thủ</button>
         <button class="seg__btn" data-mode="py">Pinyin</button>
         <button class="seg__btn" data-mode="bk">Bài khoá</button>
+        <button class="seg__btn" data-mode="np">Ngữ pháp</button>
       </div>
       <div class="search">
         <button class="search__ico" id="qOpen" data-ico="search" title="Tìm kiếm" aria-label="Tìm kiếm"></button>
@@ -67,7 +68,7 @@
             <option value="due">Đến hạn ôn</option>
           </select>
         </label>
-        <button class="btn btn--primary" id="btnAdd" data-ico="plus">Thêm từ</button>
+        <button class="btn btn--primary" id="btnAdd" data-ico="plus" title="Thêm từ">Thêm từ</button>
       </div>
     </div>
     <p class="meta" id="khoMeta"></p>
@@ -276,6 +277,6 @@
 <div id="modalRoot"></div>
 <div id="toastRoot" class="toasts"></div>
 
-<script src="app.js?v=18"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

@@ -152,7 +152,9 @@ a{color:var(--accent); text-underline-offset:2px}
 /* ── Nút ──────────────────────────────────────────────── */
 .btn{
   border:1px solid var(--line); background:var(--glass-2); color:var(--text);
-  padding:10px 18px; border-radius:14px; cursor:pointer; font-weight:600;
+  padding:9px 16px; border-radius:14px; cursor:pointer; font-weight:600;
+  /* cỡ chữ ngang với nút chuyển kho, khỏi to lấn át nội dung */
+  font-size:13px;
   display:inline-flex; align-items:center; justify-content:center; gap:7px;
   transition:transform .14s, background .18s, box-shadow .18s, color .18s;
   position:relative; white-space:nowrap;
@@ -170,7 +172,7 @@ a{color:var(--accent); text-underline-offset:2px}
 .btn--ghost:hover{background:var(--glass-2); box-shadow:none}
 .btn--icon{padding:11px 13px; border-color:transparent; background:transparent; font-size:16px; box-shadow:none}
 .btn--icon:hover{background:var(--glass-2); box-shadow:none}
-.btn--lg{padding:15px 24px; font-size:16px; border-radius:18px}
+.btn--lg{padding:14px 24px; font-size:15px; border-radius:18px}
 .btn--block{display:flex; width:100%}
 /* Dải báo bản mới: nằm ngoài thanh trên nên điện thoại ẩn thanh đó vẫn thấy */
 .upbar{
@@ -208,7 +210,7 @@ input[type=text],input[type=url],input[type=number],input[type=search],select,te
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
   transition:border-color .18s, box-shadow .18s, background .18s;
 }
-.field:not(.field--block) select{width:auto; padding:9px 32px 9px 13px}
+.field:not(.field--block) select{width:auto; padding:9px 30px 9px 12px}
 input::placeholder{color:var(--faint)}
 input:focus,select:focus,textarea:focus{
   border-color:rgba(140,100,230,.55); background:rgba(255,255,255,.85);
@@ -244,14 +246,29 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 /* Một hàng duy nhất cho mọi kích thước; ô tìm kiếm mặc định thu về icon
    vì ít dùng hơn hai bộ lọc, chạm vào mới bung ra. */
 .toolbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px}
-.toolbar > .seg{margin-bottom:0; flex:0 0 auto}
+.toolbar > .seg{margin-bottom:0; flex:0 1 auto; min-width:0}
+/* Từ máy tính bảng trở lên: ép mọi thứ nằm một hàng. Hết chỗ thì dải chọn
+   kho co lại và vuốt ngang, chứ không đẩy cụm lọc rơi xuống dòng dưới. */
+@media (min-width:768px){
+  .toolbar{flex-wrap:nowrap}
+  .toolbar > .seg{
+    overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+    min-width:270px;
+  }
+  .toolbar > .seg::-webkit-scrollbar{display:none}
+  .toolbar__row{flex-wrap:nowrap; min-width:0}
+  .toolbar__row .field{min-width:0}
+  .toolbar__row select{max-width:148px; text-overflow:ellipsis}
+  .toolbar__row .btn{padding:9px 15px}
+}
 .seg{
   display:inline-flex; gap:3px; padding:3px; margin-bottom:10px;
   background:var(--glass-3); border:1px solid var(--line); border-radius:999px;
 }
 .seg__btn{
   border:0; background:transparent; color:var(--muted); cursor:pointer;
-  padding:6px 17px; border-radius:999px; font-weight:600; font-size:13px;
+  padding:6px 13px; border-radius:999px; font-weight:600; font-size:12.5px;
+  white-space:nowrap; flex:0 0 auto;
   transition:background .18s, color .18s, box-shadow .18s;
 }
 .seg__btn.is-on{
@@ -291,6 +308,40 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .lcard__no{font-size:11.5px; font-weight:700; letter-spacing:.06em; color:var(--accent); text-transform:uppercase}
 .lcard__ten{font-size:16px; font-weight:700; line-height:1.35; margin-top:5px; letter-spacing:-.01em}
 .lcard__n{font-size:12.5px; color:var(--muted); margin-top:7px}
+
+/* ── Ngữ pháp ────────────────────────────────────────── */
+.gcard{
+  position:relative; border:1px solid var(--line); border-radius:var(--r-lg);
+  background:linear-gradient(160deg, rgba(255,255,255,.80), rgba(255,255,255,.48));
+  padding:16px 14px 13px; cursor:pointer; text-align:center; box-shadow:var(--shadow);
+  transition:transform .18s cubic-bezier(.2,.9,.3,1.2), box-shadow .2s, border-color .2s;
+}
+.gcard:hover{transform:translateY(-4px); box-shadow:0 16px 34px rgba(112,84,168,.20); border-color:rgba(255,255,255,.9)}
+.gcard__han{font-family:var(--font-han); font-size:38px; line-height:1.1; letter-spacing:.02em}
+.gcard__py{color:var(--pink); font-weight:700; font-size:14px; margin-top:5px}
+.gcard__vi{font-size:13px; color:var(--ink); margin-top:6px; line-height:1.4}
+.gcard__n{font-size:11.5px; color:var(--faint); margin-top:8px}
+
+.gram__top{
+  display:flex; align-items:center; gap:14px;
+  padding:2px 2px 16px; border-bottom:1px solid var(--line-2); margin-bottom:4px;
+}
+.gram__khoi{flex:1 1 auto; min-width:0}
+.gram__han{font-family:var(--font-han); font-size:46px; line-height:1}
+.gram__py{color:var(--pink); font-weight:700; font-size:17px}
+.gram__vi{font-size:14px; color:var(--muted); margin-top:3px}
+
+.gct{display:grid; gap:8px; margin-bottom:4px}
+.gct__row{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  background:var(--glass-3); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:10px 13px;
+}
+.gct__nhan{font-size:12px; font-weight:700; color:var(--accent); white-space:nowrap}
+.gct__mau{font-size:15px; font-weight:600; letter-spacing:.01em}
+
+.gly{margin:0; padding-left:19px; display:grid; gap:7px}
+.gly li{font-size:13.5px; line-height:1.55; color:var(--ink)}
 
 .dlg{display:flex; flex-direction:column}
 .dlg__row{
@@ -698,10 +749,34 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
      lúc không. */
   .seg__btn{padding:6px 12px; font-size:12.5px}
   .toolbar{gap:8px}
-  .toolbar > .seg{flex:0 1 auto; min-width:0}
-  .toolbar .search.is-min{flex:0 0 42px; width:42px; max-width:42px}
+    .toolbar .search.is-min{flex:0 0 42px; width:42px; max-width:42px}
+
+  /* Đã 5 kho nên không đủ chỗ một hàng: cho vuốt ngang, giấu thanh cuộn */
+  .toolbar > .seg{flex:1 1 0; min-width:0; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .toolbar > .seg::-webkit-scrollbar{display:none}
+  .seg__btn{white-space:nowrap; flex:0 0 auto}
   .search.is-min .search__ico{width:42px; height:42px}
   .toolbar__row{flex:1 0 100%}
+
+}
+
+/* Dưới 1024px thì chưa đủ chỗ cho nhãn chữ + 5 nút chuyển kho + nút Thêm từ
+   nằm cùng một hàng, nên thu gọn cụm lọc lại. */
+@media (max-width:1023px){
+  /* Nút Thêm từ trước đây ăn trọn một dòng. Cho co lại còn dấu + đứng cạnh
+     hai ô lọc: font-size:0 nuốt phần chữ, icon là SVG nên không bị ảnh hưởng. */
+  .toolbar__row .btn{
+    margin-left:auto; width:auto; flex:0 0 auto;
+    font-size:0; gap:0; padding:9px 12px;
+  }
+
+  /* Hai chữ "Nhóm theo" / "Trạng thái" ăn mất 1/3 chiều ngang mà giá trị
+     trong ô đã tự nói lên nó là gì, nên giấu đi lấy chỗ cho ô chọn.
+     Hai ô chia đều phần còn lại để không bao giờ phải xuống dòng. */
+  .toolbar__row{gap:8px; flex-wrap:nowrap}
+  .toolbar__row .field__lbl{display:none}
+  .toolbar__row .field{flex:1 1 0; min-width:0}
+  .toolbar__row .field:not(.field--block) select{width:100%; font-size:13px}
 }
 
 @media (max-width:420px){
@@ -709,11 +784,6 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   .hide-sm{display:none}
   .grid{grid-template-columns:repeat(auto-fill,minmax(126px,1fr)); gap:10px}
   .wcard__han{font-size:28px}
-  .toolbar__row{gap:8px}
-  .toolbar__row select{font-size:13px}
-  .toolbar__row .field{flex:1}
-  .toolbar__row .field:not(.field--block) select{width:100%}
-  .toolbar__row .btn{margin-left:0; width:100%}
   .modal{max-height:94vh}
   .mask{padding:12px}
   #main{padding:18px 14px 32px}
