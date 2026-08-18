@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '28';
+const APP_VER = '29';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -179,7 +179,7 @@ const PRESET = {
 
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
-  map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '',
+  map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '', gids: {},
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
   settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto' }
 };
@@ -352,6 +352,35 @@ function cellVal(c) {
     return String(+m[3]).padStart(2, '0') + '/' + String(+m[2] + 1).padStart(2, '0') + '/' + m[1];
   }
   return String(v).trim();
+}
+
+/* Link mở thẳng Google Sheet tại đúng tab, đúng dòng.
+   Cần gid của tab — lấy một lần qua ping rồi nhớ luôn. Chưa có gid thì vẫn mở
+   được Sheet, chỉ là rơi vào tab đầu tiên. */
+function sheetLink(tab, dong) {
+  const id = (state.cfg.sheetId || '').trim();
+  if (!id) return '';
+  let u = 'https://docs.google.com/spreadsheets/d/' + encodeURIComponent(id) + '/edit';
+  const gid = (state.cfg.gids || {})[tab];
+  if (gid == null) return u;
+  u += '#gid=' + gid;
+  if (dong) u += '&range=A' + dong;
+  return u;
+}
+function moSheet(tab, dong) {
+  const u = sheetLink(tab, dong);
+  if (!u) { toast('Chưa khai báo Google Sheet', 'err'); return; }
+  if (!(state.cfg.gids || {})[tab]) toast('Mở tab "' + tab + '" ở cuối trang Sheet', 'ok');
+  window.open(u, '_blank', 'noopener');
+}
+/* Hỏi Apps Script gid của các tab. Bản Apps Script cũ chưa trả gids thì thôi,
+   không báo lỗi — nút Sửa vẫn mở được Sheet. */
+async function pullGids() {
+  if (!hasWrite()) return;
+  const r = await callApi('ping', {});
+  if (!r || !r.gids) return;
+  state.cfg.gids = r.gids;
+  saveCfg();
 }
 
 /* Gọi Apps Script Web App. POST dùng text/plain để tránh preflight OPTIONS
@@ -1319,7 +1348,7 @@ function buildLessons(table) {
     const bai = g('bai') || '?';
     const hsk = g('hsk') || 'Khác';
     const key = hsk + '|' + bai;
-    if (!byKey[key]) byKey[key] = { key: key, bai: bai, ten: g('ten'), hsk: hsk, lines: [] };
+    if (!byKey[key]) byKey[key] = { key: key, bai: bai, ten: g('ten'), hsk: hsk, dong: i + 2, lines: [] };
     if (!byKey[key].ten && g('ten')) byKey[key].ten = g('ten');
     byKey[key].lines.push({
       thutu: +g('thutu') || (i + 1),
@@ -1373,6 +1402,7 @@ function buildGram(table) {
     if (!ten && !han) return;
     out.push({
       id: String(raw.id || raw.ID || ('NP-' + (i + 1))),
+      dong: i + 2,          // dòng thật trong Sheet (dòng 1 là tiêu đề)
       stt: parseFloat(g('stt')) || (i + 1),
       ten: ten || han,
       hsk: g('hsk') || 'Khác',
@@ -1703,6 +1733,10 @@ function openLesson(L) {
                     [icon('volume'), 'Nghe cả bài']);
   close = modalShell('Bài ' + L.bai + (L.ten ? ' · ' + L.ten : ''), body, [
     btnAll,
+    el('button', {
+      class: 'btn', title: 'Mở Google Sheet để sửa bài này',
+      onclick: () => moSheet(state.cfg.lessonTab, L.dong)
+    }, [icon('edit', 16), 'Sửa']),
     el('button', { class: 'btn', onclick: () => close() }, ['Đóng'])
   ]).close;
 }
@@ -1835,6 +1869,10 @@ function openGram(G) {
     : null;
   close = modalShell(G.ten, body, [
     btnAll,
+    el('button', {
+      class: 'btn', title: 'Mở Google Sheet để sửa mục này',
+      onclick: () => moSheet(state.cfg.gramTab, G.dong)
+    }, [icon('edit', 16), 'Sửa']),
     el('button', { class: 'btn', onclick: () => close() }, ['Đóng'])
   ].filter(Boolean)).close;
 }
@@ -2804,6 +2842,7 @@ async function doSync(silent) {
     if (hasWrite()) {
       try { await pullProgress(); } catch (e) {}
       try { await stampNewAt(); } catch (e) { /* thiếu tab nhật ký thì bỏ qua */ }
+      try { await pullGids(); } catch (e) { /* bản Apps Script cũ thì bỏ qua */ }
     }
     // bộ thủ nằm ngay trong bảng chính; chỉ khi không có mới đi tìm ở tab riêng
     try { await loadLessons(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
