@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '25';
+const APP_VER = '28';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -169,12 +169,17 @@ const PRESET = {
   },
   groupBy: ['Chủ đề', 'HSK', 'Từ loại', 'Bộ thủ'],
   lessonTab: 'Bài khoá',
-  gramTab: 'Ngữ pháp'
+  gramTab: 'Ngữ pháp',
+  logTab: 'Nhật ký học',
+  /* Nhúng sẵn link Web App: máy nào mở cũng ghi và đọc lại được tiến độ, khỏi
+     nhập tay từng máy. Bao giờ triển khai lại Apps Script (ra link mới) thì
+     đổi ở đây và nâng số bản. */
+  webApp: 'https://script.google.com/macros/s/AKfycbzhMiV-ETPiGbcJYZvJdKrGI8-PSJepTXPRYEIDp7ywgQGCn3MDS7TBOkJjMNd0UamooA/exec'
 };
 
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
-  map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '',
+  map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '',
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
   settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto' }
 };
@@ -219,6 +224,7 @@ function loadState() {
     state.cfg.groupBy = PRESET.groupBy.slice();
     state.cfg.lessonTab = PRESET.lessonTab || '';
     state.cfg.gramTab = PRESET.gramTab || '';
+    state.cfg.logTab = PRESET.logTab || '';
     saveCfg();
   }
   // Cấu hình đã lưu từ bản app cũ sẽ thiếu những khoá mới thêm về sau.
@@ -230,6 +236,14 @@ function loadState() {
     }
     if (!state.cfg.gramTab && PRESET.gramTab) {
       state.cfg.gramTab = PRESET.gramTab;
+      saveCfg();
+    }
+    if (!state.cfg.webApp && PRESET.webApp) {
+      state.cfg.webApp = PRESET.webApp;
+      saveCfg();
+    }
+    if (!state.cfg.logTab && PRESET.logTab) {
+      state.cfg.logTab = PRESET.logTab;
       saveCfg();
     }
   }
@@ -2125,14 +2139,31 @@ function renderHocSetup() {
   $('#cardDir').onchange = () => { state.cfg.settings.dir = $('#cardDir').value; saveCfg(); };
   paintCounts();
 }
+/* Hôm nay đã học bao nhiêu từ mới.
+   Đếm theo dấu thời gian newAt nằm trong chính bản ghi tiến độ — bản ghi này
+   đi qua Sheet nên học 10 từ mới trên máy tính thì mở điện thoại cũng biết,
+   không còn chuyện mỗi máy được cấp thêm 10 từ nữa.
+   Bộ đếm cũ trong máy vẫn giữ làm mức sàn, phòng khi chưa kịp đẩy lên Sheet
+   hoặc bản ghi cũ chưa có newAt. */
+function newDoneToday() {
+  const t = todayKey();
+  let n = 0;
+  Object.keys(state.prog).forEach(id => {
+    const p = state.prog[id];
+    if (p && p.newAt && todayKey(p.newAt) === t) n++;
+  });
+  const trongMay = state.meta.newDay === t ? (state.meta.newCount || 0) : 0;
+  return Math.max(n, trongMay);
+}
 /* Số từ mới còn được phép học trong hôm nay */
 function newLeftToday() {
-  const used = state.meta.newDay === todayKey() ? (state.meta.newCount || 0) : 0;
-  return Math.max(0, (state.cfg.settings.newPerDay || 10) - used);
+  return Math.max(0, (state.cfg.settings.newPerDay || 10) - newDoneToday());
 }
 function paintCounts() {
   const c = countsOf(deckWords($('#deckPick').value));
-  const doneToday = state.log[todayKey()] || 0;
+  // Sổ đếm lượt ôn chỉ có trong máy này, máy khác không thấy. Dựa thêm vào số
+  // từ mới đã học hôm nay (thứ này có đồng bộ) để không báo nhầm là chưa học.
+  const doneToday = (state.log[todayKey()] || 0) || newDoneToday();
   const left = newLeftToday();
   $('#cntNew').textContent = Math.min(c.nw, left);
   $('#cntLearn').textContent = c.lr;
@@ -2251,6 +2282,10 @@ function rate(r) {
   state.prog[w.id] = next; saveProg();
 
   if (wasNew) {
+    // Đóng dấu ngay vào bản ghi để nó theo lên Sheet, máy khác đọc về là biết
+    // hôm nay đã tiêu bao nhiêu suất từ mới.
+    next.newAt = next.last || Date.now();
+    state.prog[w.id] = next; saveProg();
     // Phải so ngày TRƯỚC khi ghi đè newDay, nếu không thì điều kiện luôn đúng
     // và bộ đếm cộng dồn mãi -> học đủ 10 từ mới một lần là tắt hẳn từ mới.
     const today = todayKey();
@@ -2483,6 +2518,7 @@ function paintSyncInfo() {
   if (state.lessons.length) bit.push(state.lessons.length + ' bài khoá');
   if (state.gram.length) bit.push(state.gram.length + ' mục ngữ pháp');
   bit.push(state.meta.syncAt ? 'đồng bộ lúc ' + fmtClock(state.meta.syncAt) : 'chưa đồng bộ lần nào');
+  if (!hasWrite()) bit.push('CHƯA nối Web App — tiến độ học chỉ nằm trong máy này');
   if (state.queue.length) bit.push(state.queue.length + ' thay đổi đang chờ đẩy lên');
   n.textContent = bit.join(' · ');
 }
@@ -2765,7 +2801,10 @@ async function doSync(silent) {
       state.rads.forEach(r => before[r.id] = 1);
     }
 
-    if (hasWrite()) { try { await pullProgress(); } catch (e) {} }
+    if (hasWrite()) {
+      try { await pullProgress(); } catch (e) {}
+      try { await stampNewAt(); } catch (e) { /* thiếu tab nhật ký thì bỏ qua */ }
+    }
     // bộ thủ nằm ngay trong bảng chính; chỉ khi không có mới đi tìm ở tab riêng
     try { await loadLessons(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
     try { await loadGram(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
@@ -2841,6 +2880,47 @@ async function pullProgress() {
     if (!mine || (row.last || 0) > (mine.last || 0)) state.prog[row.id] = row;
   });
   saveProg();
+}
+
+/* "18/08/2026" -> mốc thời gian giữa trưa hôm đó (chỉ cần đúng ngày) */
+function ngayVN(v) {
+  const m = String(v == null ? '' : v).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return 0;
+  return new Date(+m[3], +m[2] - 1, +m[1], 12, 0, 0).getTime();
+}
+
+/* Bản ghi tiến độ tạo trước bản 26 không có dấu newAt nên không biết từ đó
+   rời trạng thái "mới" ngày nào — máy khác đọc về sẽ tưởng hôm nay chưa học
+   từ mới nào và cấp thừa suất. Tab Nhật ký học lưu mọi lượt đánh giá kèm
+   ngày, lấy dòng sớm nhất của từng từ đóng dấu bù.
+   Chỉ chạy khi còn bản ghi thiếu dấu nên đóng xong là tự thôi. */
+async function stampNewAt() {
+  const thieu = Object.keys(state.prog).filter(id => state.prog[id] && !state.prog[id].newAt);
+  if (!thieu.length) return;
+  const tab = (state.cfg.logTab || '').trim();
+  if (!tab || !state.cfg.sheetId) return;
+
+  const t = await readSheet(state.cfg.sheetId, tab, '');
+  const iId = t.cols.findIndex(c => /^id$/i.test(String(c || '').trim()));
+  const iTs = t.cols.findIndex(c => /thời điểm|thoi diem/i.test(String(c || '')));
+  if (iId < 0 || iTs < 0) return;
+
+  const som = {};
+  t.rows.forEach(r => {
+    const id = String(r[iId] || '').trim();
+    const ts = ngayVN(r[iTs]);
+    if (!id || !ts) return;
+    if (!som[id] || ts < som[id]) som[id] = ts;
+  });
+
+  let n = 0;
+  thieu.forEach(id => {
+    if (!som[id]) return;
+    state.prog[id].newAt = som[id];
+    queueProgressPush(id);
+    n++;
+  });
+  if (n) saveProg();
 }
 
 /* Trình duyệt trên điện thoại giữ cache khá dai; sau khi bạn đưa bản mới lên
@@ -2990,6 +3070,12 @@ function bind() {
 
   window.addEventListener('online', () => flushQueue(false));
   window.addEventListener('beforeunload', () => { if (Object.keys(progDirty).length) pushProgressNow(); });
+  // Trên điện thoại beforeunload gần như không bao giờ chạy (chuyển app, khoá
+  // màn hình, đóng tab đều không tính), nên phải bám vào lúc trang bị ẩn.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    if (Object.keys(progDirty).length || logBuf.length) pushProgressNow();
+  });
 }
 
 function init() {
