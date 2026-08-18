@@ -35,6 +35,7 @@
   --shadow:0 6px 22px rgba(112,84,168,.10);
   --shadow-lg:0 20px 60px rgba(88,62,140,.24);
   --han:"Noto Serif SC","Songti SC","SimSun","Microsoft YaHei","PingFang SC",serif;
+  --han-sans:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
   --ui:"Quicksand",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --bar-h:64px;
 }
@@ -317,7 +318,7 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   transition:transform .18s cubic-bezier(.2,.9,.3,1.2), box-shadow .2s, border-color .2s;
 }
 .gcard:hover{transform:translateY(-4px); box-shadow:0 16px 34px rgba(112,84,168,.20); border-color:rgba(255,255,255,.9)}
-.gcard__han{font-family:var(--font-han); font-size:38px; line-height:1.1; letter-spacing:.02em}
+.gcard__han{font-family:var(--han); font-size:38px; line-height:1.1; font-weight:600; letter-spacing:.02em}
 .gcard__py{color:var(--pink); font-weight:700; font-size:14px; margin-top:5px}
 .gcard__vi{font-size:13px; color:var(--ink); margin-top:6px; line-height:1.4}
 .gcard__n{font-size:11.5px; color:var(--faint); margin-top:8px}
@@ -327,7 +328,7 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   padding:2px 2px 16px; border-bottom:1px solid var(--line-2); margin-bottom:4px;
 }
 .gram__khoi{flex:1 1 auto; min-width:0}
-.gram__han{font-family:var(--font-han); font-size:46px; line-height:1}
+.gram__han{font-family:var(--han); font-size:46px; line-height:1; font-weight:600}
 .gram__py{color:var(--pink); font-weight:700; font-size:17px}
 .gram__vi{font-size:14px; color:var(--muted); margin-top:3px}
 
@@ -509,21 +510,39 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 
 .detail__top{text-align:center; padding:6px 0 20px}
 .detail__han{font-family:var(--han); font-size:70px; line-height:1.15; font-weight:600; letter-spacing:.04em}
+/* Hai kiểu chữ đặt cạnh nhau, cùng cỡ. Cỡ giảm dần theo số chữ để từ dài
+   vẫn nằm gọn một hàng trên màn điện thoại. */
+.detail__han--doi{
+  display:flex; align-items:center; justify-content:center;
+  gap:14px; flex-wrap:wrap; letter-spacing:.02em;
+}
+.detail__han--doi.len-1{font-size:64px}
+.detail__han--doi.len-2{font-size:46px}
+.detail__han--doi.len-3{font-size:33px; gap:11px}
+.detail__han--doi.len-4{font-size:26px; gap:9px}
+.dhan--co{font-family:var(--han)}
+.dhan--khong{font-family:var(--han-sans); font-weight:500}
+.dhan__cham{font-family:var(--ui); font-weight:500; color:var(--faint); font-size:.42em}
 .detail__py{color:var(--pink); font-size:20px; font-weight:700; margin-top:5px}
+/* Mọi dòng chữ Việt trong thẻ chi tiết dùng chung một cỡ (14px) — trước đây
+   chỗ 13 chỗ 14 chỗ 15 nên nhìn so le. Chữ Hán giữ nguyên cỡ cũ 16px. */
 .detail__vi{
-  font-size:15px; margin-top:12px; color:var(--text); white-space:pre-wrap;
+  font-size:14px; margin-top:12px; color:var(--text);
   text-align:left; line-height:1.6;
   background:var(--glass-3); border-radius:var(--r); padding:12px 14px;
 }
+.dvi__t{font-size:14px}
+.dvi__han{font-family:var(--han); font-size:16px; line-height:1.55}
+.dvi__gap{height:9px}
 .detail__spk{margin-top:16px}
 .dtable{width:100%; border-collapse:collapse; font-size:14px}
 .dtable th,.dtable td{padding:10px 12px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line-2)}
 .dtable td{white-space:pre-wrap; word-break:break-word}
-.dtable th{color:var(--muted); font-weight:600; width:38%; font-size:13px}
+.dtable th{color:var(--muted); font-weight:600; width:38%; font-size:14px}
 .dtable tr:last-child th,.dtable tr:last-child td{border-bottom:0}
 .dtable .han{font-family:var(--han); font-size:16px}
 .dimg{max-width:100%; height:auto; border-radius:10px; display:block}
-.srsbox{border-radius:var(--r); padding:14px 16px; margin-top:18px; font-size:13px; color:var(--muted); box-shadow:none}
+.srsbox{border-radius:var(--r); padding:14px 16px; margin-top:18px; font-size:14px; color:var(--muted); box-shadow:none}
 .srsbox b{color:var(--text)}
 .navpair{display:flex; gap:8px; margin-right:auto}
 .navpair .btn{flex:0 0 auto}

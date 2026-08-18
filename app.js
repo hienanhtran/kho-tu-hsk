@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '21';
+const APP_VER = '25';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -1894,6 +1894,45 @@ function openDetail(id) {
   state.detailIdx = idx;
   showDetail(list, idx);
 }
+/* Ô nghĩa thường gộp nhiều dòng: nghĩa · câu ví dụ chữ Hán · pinyin · dịch.
+   Để nguyên một khối thì dòng chữ Hán rơi vào font mặc định nên trông to nhỏ
+   lộn xộn. Tách từng dòng ra, dòng nào có chữ Hán thì cho đúng font Hán. */
+function laHan(t) {
+  const chu = String(t).replace(/\s/g, '');
+  if (!chu) return false;
+  const n = (chu.match(CJK_RE) || []).length;
+  return n > 0 && n * 2 >= chu.length;   // quá nửa là chữ Hán mới đổi font
+}
+function dongHan(txt) {
+  const box = el('div', {});
+  String(txt == null ? '' : txt).split(/\r?\n/).forEach(d => {
+    const t = d.trim();
+    if (!t) { box.appendChild(el('div', { class: 'dvi__gap' })); return; }
+    box.appendChild(el('div', { class: laHan(t) ? 'dvi__han' : 'dvi__t', text: t }));
+  });
+  return box;
+}
+function viBlock(txt) {
+  if (!String(txt == null ? '' : txt).trim()) return null;
+  const box = dongHan(txt);
+  box.className = 'detail__vi';
+  return box;
+}
+
+/* Chữ Hán ở đầu thẻ chi tiết từ vựng: hiện hai lần cạnh nhau, ngăn bằng dấu
+   chấm giữa — bản có chân để nhận mặt chữ in sách, bản không chân là kiểu
+   hay gặp trên màn hình. Chữ càng dài thì cỡ càng nhỏ cho khỏi tràn ngang. */
+function hanDoi(w) {
+  const chu = String(w.f.hanzi || '');
+  if (w.isRad || w.isPin) return el('div', { class: 'detail__han', text: chu });
+  const n = Math.min(Math.max((chu.match(CJK_RE) || []).length || chu.length, 1), 4);
+  return el('div', { class: 'detail__han detail__han--doi len-' + n }, [
+    el('span', { class: 'dhan--co', text: chu }),
+    el('span', { class: 'dhan__cham', text: '\u00B7' }),
+    el('span', { class: 'dhan--khong', text: chu })
+  ]);
+}
+
 function showDetail(list, idx) {
   closeAllModals();
   const w = list[idx];
@@ -1904,7 +1943,7 @@ function showDetail(list, idx) {
     if (/^id$/i.test(c.trim())) return;
     const v = w.raw[c];
     if (!v) return;
-    const isHan = /[一-鿿]/.test(v);
+
     // Ô kiểu <img src="..."> : ảnh trên mạng thì hiện ảnh, ảnh nằm trên máy thì
     // hiện nguyên văn đường dẫn — không bỏ đi, để không thiếu nội dung nào.
     const img = v.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
@@ -1912,16 +1951,16 @@ function showDetail(list, idx) {
     if (img && /^https?:\/\//i.test(img[1])) {
       cell = el('td', {}, [el('img', { src: img[1], alt: c, class: 'dimg' })]);
     } else {
-      cell = el('td', { class: isHan ? 'han' : '', text: v });
+      cell = el('td', {}, [dongHan(v)]);
     }
     rows.push(el('tr', {}, [el('th', { text: c }), cell]));
   });
 
   const body = el('div', { class: w.isPin ? 'detail--pin' : '' }, [
     el('div', { class: 'detail__top' }, [
-      el('div', { class: 'detail__han', text: w.f.hanzi }),
+      hanDoi(w),
       el('div', { class: 'detail__py', text: (w.isRad && w.r.name ? w.r.name + ' · ' : '') + w.f.pinyin }),
-      w.isPin ? null : el('div', { class: 'detail__vi', text: w.f.nghiaViet }),
+      w.isPin ? null : viBlock(w.f.nghiaViet),
       el('div', { class: 'detail__spk' }, [
         el('button', { class: 'btn', onclick: () => speak(spkText(w), w.f.audio) }, [icon('volume'), 'Nghe phát âm'])
       ])
