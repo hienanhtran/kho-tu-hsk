@@ -172,6 +172,12 @@ a{color:var(--accent); text-underline-offset:2px}
 .btn--icon:hover{background:var(--glass-2); box-shadow:none}
 .btn--lg{padding:15px 24px; font-size:16px; border-radius:18px}
 .btn--block{display:flex; width:100%}
+.btn--up{
+  background:linear-gradient(135deg,#f0a94c,#ff8fae); border-color:transparent; color:#fff;
+  font-size:12.5px; padding:8px 14px;
+  box-shadow:0 6px 18px rgba(240,160,80,.38);
+}
+.btn--up:hover{background:linear-gradient(135deg,#e89a37,#ff7ea3)}
 .btn--danger{color:var(--pink); border-color:var(--pink-soft)}
 .btn--danger:hover{background:var(--pink-soft)}
 .badge{
@@ -674,6 +680,23 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   .modal{max-width:580px}
   .panel{padding:24px}
 }
+/* ── Chỉ áp dụng cho điện thoại ───────────────────────── */
+@media (max-width:767px){
+  /* Thanh trên không dính nữa: cuộn xuống là nó đi luôn, nhường chỗ cho nội
+     dung. Thanh tab dưới vẫn cố định nên vẫn chuyển màn được. */
+  .appbar{position:static}
+
+  /* Nút chuyển kho + nút tìm phải nằm chung một hàng. Bóp nhẹ nút chuyển kho
+     cho đủ chỗ, và ép hàng bộ lọc luôn xuống dòng riêng cho khỏi lúc được
+     lúc không. */
+  .seg__btn{padding:6px 12px; font-size:12.5px}
+  .toolbar{gap:8px}
+  .toolbar > .seg{flex:0 1 auto; min-width:0}
+  .toolbar .search.is-min{flex:0 0 42px; width:42px; max-width:42px}
+  .search.is-min .search__ico{width:42px; height:42px}
+  .toolbar__row{flex:1 0 100%}
+}
+
 @media (max-width:420px){
   .brand__name{display:none}
   .hide-sm{display:none}

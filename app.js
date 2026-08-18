@@ -153,6 +153,10 @@ const FIELDS = [
    Đổi sang Sheet khác: sửa 3 dòng đầu ở đây, hoặc dán link mới trong
    Cài đặt (cái đã lưu trong máy luôn được ưu tiên hơn phần này).
    ───────────────────────────────────────────────────────────────── */
+/* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
+   thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
+const APP_VER = '17';
+
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
   sheetId:  '1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds',
@@ -2599,10 +2603,28 @@ async function pullProgress() {
   saveProg();
 }
 
+/* Trình duyệt trên điện thoại giữ cache khá dai; sau khi bạn đưa bản mới lên
+   máy chủ nó vẫn chạy bản cũ. Hỏi version.json (kèm tham số chống cache) để
+   biết có bản mới không, rồi tải lại kèm dấu thời gian cho chắc chắn sạch. */
+async function checkUpdate() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    const j = await r.json();
+    if (!j || !j.v || String(j.v) === APP_VER) return;
+    const b = $('#btnUpdate');
+    if (b) { b.hidden = false; b.title = 'Bản trên máy chủ: ' + j.v + ' · đang chạy: ' + APP_VER; }
+  } catch (e) { /* chạy bằng file:// hoặc mất mạng thì thôi */ }
+}
+function doUpdate() {
+  const u = location.pathname + '?u=' + Date.now();
+  location.replace(u);
+}
+
 /* ═══ 13. KHỞI ĐỘNG ═════════════════════════════════════════════ */
 
 function bind() {
-  $('#btnSync').onclick = () => doSync(false);
+  $('#btnSync').onclick = () => { doSync(false); checkUpdate(); };
+  $('#btnUpdate').onclick = doUpdate;
 
   const reKho = debounce(renderKho, 180);
   const setSearch = open => {
@@ -2739,6 +2761,7 @@ function init() {
   paintQueueBadge();
   go(state.cfg.sheetId ? 'kho' : (state.demo ? 'kho' : 'caidat'));
   paintDueDot();
+  checkUpdate();
   if (state.cfg.sheetId && state.cfg.map && state.cfg.map.hanzi) {
     doSync(true);
     flushQueue(true);

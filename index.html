@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
@@ -25,6 +25,7 @@
     </div>
     <nav class="nav nav--top" id="navTop"></nav>
     <div class="appbar__actions">
+      <button class="btn btn--up" id="btnUpdate" hidden title="Tải bản mới nhất">Có bản mới</button>
       <button class="btn btn--ghost" id="btnSync" title="Đồng bộ với Google Sheet">
         <span class="ico" id="syncIco" data-ico="refresh"></span><span class="hide-sm">Đồng bộ</span>
         <span class="badge" id="queueBadge" hidden>0</span>
@@ -266,6 +267,6 @@
 <div id="modalRoot"></div>
 <div id="toastRoot" class="toasts"></div>
 
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
