@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kho từ HSK · Học ngắt quãng</title>
+<meta name="description" content="Kho từ vựng tiếng Trung đồng bộ Google Sheet + ôn tập ngắt quãng kiểu Anki.">
+<meta name="theme-color" content="#f4f1fc">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=16">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar__inner">
+    <div class="brand">
+      <span class="brand__mark">汉</span>
+      <span class="brand__name">Kho từ HSK</span>
+    </div>
+    <nav class="nav nav--top" id="navTop"></nav>
+    <div class="appbar__actions">
+      <button class="btn btn--ghost" id="btnSync" title="Đồng bộ với Google Sheet">
+        <span class="ico" id="syncIco" data-ico="refresh"></span><span class="hide-sm">Đồng bộ</span>
+        <span class="badge" id="queueBadge" hidden>0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ══════════ KHO TỪ ══════════ -->
+  <section class="view" id="view-kho">
+    <div class="toolbar">
+      <div class="seg" id="segMode" hidden>
+        <button class="seg__btn is-on" data-mode="tu">Từ vựng</button>
+        <button class="seg__btn" data-mode="bo">Bộ thủ</button>
+        <button class="seg__btn" data-mode="py">Pinyin</button>
+        <button class="seg__btn" data-mode="bk">Bài khoá</button>
+      </div>
+      <div class="search">
+        <button class="search__ico" id="qOpen" data-ico="search" title="Tìm kiếm" aria-label="Tìm kiếm"></button>
+        <input id="q" type="search" placeholder="Tìm chữ Hán, pinyin, nghĩa…" autocomplete="off">
+        <button class="search__clear" id="qClear" data-ico="x" data-ico-size="13" hidden aria-label="Xoá"></button>
+      </div>
+      <div class="toolbar__row">
+        <label class="field">
+          <span class="field__lbl">Nhóm theo</span>
+          <select id="groupBy"></select>
+        </label>
+        <label class="field">
+          <span class="field__lbl">Trạng thái</span>
+          <select id="filterState">
+            <option value="">Tất cả</option>
+            <option value="added">Mới thêm gần nhất</option>
+            <option value="new">Chưa học</option>
+            <option value="learn">Đang học</option>
+            <option value="review">Đã thuộc</option>
+            <option value="due">Đến hạn ôn</option>
+          </select>
+        </label>
+        <button class="btn btn--primary" id="btnAdd" data-ico="plus">Thêm từ</button>
+      </div>
+    </div>
+    <p class="meta" id="khoMeta"></p>
+    <div id="khoList"></div>
+  </section>
+
+  <!-- ══════════ HỌC ══════════ -->
+  <section class="view" id="view-hoc">
+    <div id="hocSetup">
+      <div class="hero">
+        <h2 class="hero__title">Ôn tập hôm nay</h2>
+        <div class="counts">
+          <div class="count count--new"><b id="cntNew">0</b><span>Từ mới</span></div>
+          <div class="count count--learn"><b id="cntLearn">0</b><span>Đang học</span></div>
+          <div class="count count--due"><b id="cntDue">0</b><span>Đến hạn</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <label class="field field--block">
+          <span class="field__lbl">Bộ từ</span>
+          <select id="deckPick"></select>
+        </label>
+        <label class="field field--block">
+          <span class="field__lbl">Kiểu thẻ</span>
+          <select id="cardDir">
+            <option value="h2m">Chữ Hán → Nghĩa</option>
+            <option value="m2h">Nghĩa → Chữ Hán</option>
+            <option value="a2m">Nghe → Nghĩa</option>
+            <option value="mix">Trộn ngẫu nhiên</option>
+          </select>
+        </label>
+        <button class="btn btn--primary btn--lg btn--block" id="btnStart">Bắt đầu học</button>
+      </div>
+    </div>
+
+    <div id="hocSession" hidden>
+      <div class="sess__bar"><div class="sess__fill" id="sessFill"></div></div>
+      <div class="sess__head">
+        <button class="btn btn--icon" id="btnQuit" data-ico="x" title="Kết thúc phiên"></button>
+        <span class="sess__left" id="sessLeft"></span>
+      </div>
+      <div class="card" id="card">
+        <div class="card__front" id="cardFront"></div>
+        <div class="card__back" id="cardBack" hidden></div>
+      </div>
+      <div class="rate" id="rateBox" hidden></div>
+      <button class="btn btn--primary btn--lg btn--block" id="btnFlip">Xem đáp án</button>
+    </div>
+
+    <div id="hocDone" hidden>
+      <div class="done">
+        <div class="done__ico" data-ico="award" data-ico-size="60"></div>
+        <h2>Xong rồi!</h2>
+        <p id="doneMsg"></p>
+        <button class="btn btn--primary" id="btnBackDeck">Về màn hình học</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ THỐNG KÊ ══════════ -->
+  <section class="view" id="view-thongke">
+    <div class="stats" id="statTiles"></div>
+    <div class="panel">
+      <h3 class="panel__title">30 ngày gần nhất</h3>
+      <div class="chart" id="chart30"></div>
+    </div>
+    <div class="panel">
+      <h3 class="panel__title">Phân bố theo trạng thái</h3>
+      <div id="statBreak"></div>
+    </div>
+  </section>
+
+  <!-- ══════════ CÀI ĐẶT ══════════ -->
+  <section class="view" id="view-caidat">
+
+    <div class="panel">
+      <h3 class="panel__title">1 · Nguồn dữ liệu</h3>
+      <label class="field field--block">
+        <span class="field__lbl">Link Google Sheet</span>
+        <input id="cfgUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…">
+      </label>
+      <p class="hint">Sheet phải để chế độ <b>Bất kỳ ai có đường liên kết → Người xem</b>.</p>
+      <label class="field field--block">
+        <span class="field__lbl">Tên tab (để trống = tab đầu tiên)</span>
+        <input id="cfgTab" type="text" list="tabList" placeholder="Trang tính1 — bấm để chọn nếu đã nối Web App">
+        <datalist id="tabList"></datalist>
+      </label>
+      <button class="btn btn--primary" id="btnReadCols">Đọc cấu trúc bảng</button>
+      <div id="colsStatus" class="status"></div>
+    </div>
+
+    <div class="panel" id="panelMap" hidden>
+      <h3 class="panel__title">2 · Khai báo cột</h3>
+      <p class="hint">Ghép từng mục của app với cột trong Sheet. Cột không ghép vẫn được giữ và hiện ở màn chi tiết.</p>
+      <div id="mapRows" class="maprows"></div>
+      <h4 class="sub">Cho phép nhóm theo</h4>
+      <div id="groupPick" class="chips"></div>
+      <h4 class="sub" id="colListTitle">Tất cả cột trong Sheet</h4>
+      <p class="hint">Cột nào cũng được đọc và hiện đủ ở màn chi tiết. Ghép vào một mục của app chỉ để app biết dùng nó ở thẻ, khi tìm kiếm và khi học.</p>
+      <div id="colList" class="collist"></div>
+      <button class="btn btn--primary" id="btnSaveMap">Lưu khai báo &amp; tải dữ liệu</button>
+    </div>
+
+    <div class="panel" id="panelLookup">
+      <h3 class="panel__title">2b · Gộp nhóm bằng bảng tra (tuỳ chọn)</h3>
+      <p class="hint">Bộ thủ trong bảng từ vựng thường ghi rời rạc nên nhóm ra hàng chục mục lẻ tẻ. Trỏ sang một tab khác trong cùng Sheet để gộp chúng thành vài phân loại lớn.</p>
+      <label class="field field--block">
+        <span class="field__lbl">Tab bảng tra</span>
+        <input id="lkTab" type="text" list="tabList" placeholder="Radicals">
+      </label>
+      <button class="btn" id="btnReadLookup">Đọc bảng tra</button>
+      <div id="lkCols" hidden>
+        <div class="maprows" style="margin-top:14px">
+          <div class="maprow"><div class="maprow__lbl">Cột bộ thủ <i>*</i></div><select id="lkKey"></select></div>
+          <div class="maprow"><div class="maprow__lbl">Cột biến thể</div><select id="lkVar"></select></div>
+          <div class="maprow"><div class="maprow__lbl">Cột phân loại <i>*</i></div><select id="lkVal"></select></div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn btn--primary" id="btnSaveLookup">Lưu &amp; áp dụng</button>
+        </div>
+      </div>
+      <div id="lookupStatus" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <h3 class="panel__title">3 · Ghi vào Sheet (tuỳ chọn)</h3>
+      <p class="hint">Dán link Web App của Apps Script để mở khoá Thêm / Sửa / Xoá và đồng bộ tiến độ giữa máy tính và điện thoại. Hướng dẫn ở file <code>README.md</code>.</p>
+      <label class="field field--block">
+        <span class="field__lbl">Web App URL</span>
+        <input id="cfgWebApp" type="url" placeholder="https://script.google.com/macros/s/…/exec">
+      </label>
+      <div class="row">
+        <button class="btn" id="btnPing">Kiểm tra kết nối</button>
+        <button class="btn" id="btnEnsure">Chuẩn hoá Sheet</button>
+        <button class="btn" id="btnPushAll">Đẩy toàn bộ tiến độ lên Sheet</button>
+      </div>
+      <div id="webAppStatus" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <h3 class="panel__title">4 · Cách học</h3>
+      <label class="field field--block">
+        <span class="field__lbl">Số từ mới mỗi ngày</span>
+        <input id="cfgNew" type="number" min="0" max="100" step="5">
+      </label>
+      <label class="field field--block">
+        <span class="field__lbl">Giới hạn thẻ ôn mỗi ngày</span>
+        <input id="cfgMaxRev" type="number" min="10" max="999" step="10">
+      </label>
+      <label class="field field--block">
+        <span class="field__lbl">Gộp nhóm ít hơn bao nhiêu từ vào mục "Khác" (0 = không gộp)</span>
+        <input id="cfgMinGroup" type="number" min="0" max="20" step="1">
+      </label>
+      <label class="field field--block">
+        <span class="field__lbl">Nguồn phát âm</span>
+        <select id="cfgTts">
+          <option value="auto">Tự động — ưu tiên giọng thật trên mạng</option>
+          <option value="net">Chỉ giọng thật trên mạng (cần internet)</option>
+          <option value="local">Chỉ giọng cài trong máy (chạy offline)</option>
+        </select>
+      </label>
+      <label class="field field--block">
+        <span class="field__lbl">Giọng trong máy</span>
+        <select id="cfgVoice"></select>
+      </label>
+      <div class="row">
+        <button class="btn" id="btnTestVoice" data-ico="volume">Thử phát âm 你好</button>
+        <button class="btn" id="btnAudioCheck">Kiểm tra âm thanh</button>
+      </div>
+      <div id="voiceStatus" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <h3 class="panel__title">5 · Mang sang máy khác</h3>
+      <div class="row">
+        <button class="btn" id="btnCopyLink">Copy link kèm cấu hình</button>
+        <button class="btn" id="btnExport">Xuất file sao lưu</button>
+        <button class="btn" id="btnImport">Nhập file sao lưu</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" hidden>
+      <p class="hint">Link kèm cấu hình dán được sang điện thoại là dùng ngay, không phải khai báo lại.</p>
+    </div>
+
+    <div class="panel panel--danger">
+      <h3 class="panel__title">Xoá dữ liệu trên thiết bị này</h3>
+      <div class="row">
+        <button class="btn btn--danger" id="btnResetProg">Xoá tiến độ học</button>
+        <button class="btn btn--danger" id="btnResetAll">Xoá sạch &amp; khai báo lại</button>
+      </div>
+    </div>
+
+    <p class="foot">Kho từ HSK · dữ liệu nằm trên Google Sheet của bạn, app chỉ đọc và ghi theo lệnh.</p>
+  </section>
+
+</main>
+
+<nav class="nav nav--bottom" id="navBottom"></nav>
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toasts"></div>
+
+<script src="app.js?v=16"></script>
+</body>
+</html>
