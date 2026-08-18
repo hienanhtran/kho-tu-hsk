@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 
@@ -25,7 +25,6 @@
     </div>
     <nav class="nav nav--top" id="navTop"></nav>
     <div class="appbar__actions">
-      <button class="btn btn--up" id="btnUpdate" hidden title="Tải bản mới nhất">Có bản mới</button>
       <button class="btn btn--ghost" id="btnSync" title="Đồng bộ với Google Sheet">
         <span class="ico" id="syncIco" data-ico="refresh"></span><span class="hide-sm">Đồng bộ</span>
         <span class="badge" id="queueBadge" hidden>0</span>
@@ -33,6 +32,8 @@
     </div>
   </div>
 </header>
+
+<button class="upbar" id="btnUpdate" hidden>Có bản mới — bấm để cập nhật</button>
 
 <main id="main">
 
@@ -141,6 +142,14 @@
 
   <!-- ══════════ CÀI ĐẶT ══════════ -->
   <section class="view" id="view-caidat">
+
+    <div class="panel" id="panelSync">
+      <h3 class="panel__title">Đồng bộ</h3>
+      <p class="hint" id="syncInfo"></p>
+      <div class="row">
+        <button class="btn btn--primary btn--block" id="btnSync2" data-ico="refresh">Đồng bộ với Google Sheet</button>
+      </div>
+    </div>
 
     <div class="panel">
       <h3 class="panel__title">1 · Nguồn dữ liệu</h3>
@@ -267,6 +276,6 @@
 <div id="modalRoot"></div>
 <div id="toastRoot" class="toasts"></div>
 
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

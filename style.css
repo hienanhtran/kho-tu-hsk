@@ -172,12 +172,14 @@ a{color:var(--accent); text-underline-offset:2px}
 .btn--icon:hover{background:var(--glass-2); box-shadow:none}
 .btn--lg{padding:15px 24px; font-size:16px; border-radius:18px}
 .btn--block{display:flex; width:100%}
-.btn--up{
-  background:linear-gradient(135deg,#f0a94c,#ff8fae); border-color:transparent; color:#fff;
-  font-size:12.5px; padding:8px 14px;
-  box-shadow:0 6px 18px rgba(240,160,80,.38);
+/* Dải báo bản mới: nằm ngoài thanh trên nên điện thoại ẩn thanh đó vẫn thấy */
+.upbar{
+  display:block; width:100%; border:0; cursor:pointer;
+  background:linear-gradient(135deg,#f0a94c,#ff8fae); color:#fff;
+  font:inherit; font-size:13px; font-weight:700; letter-spacing:.01em;
+  padding:11px 16px; text-align:center;
 }
-.btn--up:hover{background:linear-gradient(135deg,#e89a37,#ff7ea3)}
+.upbar:hover{background:linear-gradient(135deg,#e89a37,#ff7ea3)}
 .btn--danger{color:var(--pink); border-color:var(--pink-soft)}
 .btn--danger:hover{background:var(--pink-soft)}
 .badge{
@@ -680,11 +682,16 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   .modal{max-width:580px}
   .panel{padding:24px}
 }
+#panelSync{display:none}
+
 /* ── Chỉ áp dụng cho điện thoại ───────────────────────── */
 @media (max-width:767px){
-  /* Thanh trên không dính nữa: cuộn xuống là nó đi luôn, nhường chỗ cho nội
-     dung. Thanh tab dưới vẫn cố định nên vẫn chuyển màn được. */
-  .appbar{position:static}
+  /* Bỏ hẳn thanh tiêu đề: logo không cần, nút Đồng bộ chuyển vào Cài đặt.
+     Dôi ra khoảng 60px chiều cao cho nội dung. */
+  .appbar{display:none}
+  #panelSync{display:block}
+  #main{padding-top:calc(16px + env(safe-area-inset-top))}
+  .upbar{padding-top:calc(11px + env(safe-area-inset-top))}
 
   /* Nút chuyển kho + nút tìm phải nằm chung một hàng. Bóp nhẹ nút chuyển kho
      cho đủ chỗ, và ép hàng bộ lọc luôn xuống dòng riêng cho khỏi lúc được

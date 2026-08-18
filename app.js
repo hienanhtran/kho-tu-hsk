@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '17';
+const APP_VER = '18';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2248,7 +2248,19 @@ async function saveLookup() {
   }
 }
 
+function paintSyncInfo() {
+  const n = $('#syncInfo');
+  if (!n) return;
+  const bit = [];
+  bit.push(state.words.length + ' từ');
+  if (state.rads.length) bit.push(state.rads.length + ' bộ thủ');
+  if (state.lessons.length) bit.push(state.lessons.length + ' bài khoá');
+  bit.push(state.meta.syncAt ? 'đồng bộ lúc ' + fmtClock(state.meta.syncAt) : 'chưa đồng bộ lần nào');
+  if (state.queue.length) bit.push(state.queue.length + ' thay đổi đang chờ đẩy lên');
+  n.textContent = bit.join(' · ');
+}
 function fillSettings() {
+  paintSyncInfo();
   const c = state.cfg;
   $('#cfgUrl').value = c.sheetUrl || '';
   $('#cfgTab').value = c.tab || '';
@@ -2545,7 +2557,7 @@ async function doSync(silent) {
       }
       LS.set(K.meta, state.meta);
       saveWords();
-      renderKho(); paintDueDot();
+      renderKho(); paintDueDot(); paintSyncInfo();
       toast('Đã đồng bộ ' + fresh.length + ' từ' + (state.rads.length ? ' và ' + state.rads.length + ' bộ thủ' : ''), 'ok');
     };
     if (silent || (!d.added.length && !d.changed.length && !d.removed.length)) {
@@ -2623,7 +2635,9 @@ function doUpdate() {
 /* ═══ 13. KHỞI ĐỘNG ═════════════════════════════════════════════ */
 
 function bind() {
-  $('#btnSync').onclick = () => { doSync(false); checkUpdate(); };
+  const syncNow = () => { doSync(false); checkUpdate(); };
+  $('#btnSync').onclick = syncNow;
+  $('#btnSync2').onclick = syncNow;
   $('#btnUpdate').onclick = doUpdate;
 
   const reKho = debounce(renderKho, 180);
