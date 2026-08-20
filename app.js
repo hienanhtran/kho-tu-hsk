@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '29';
+const APP_VER = '34';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -165,7 +165,7 @@ const PRESET = {
   map: {
     hanzi: 'Chữ hán', pinyin: 'Pinyin', nghiaViet: 'Nghĩa', hsk: 'HSK',
     chuDe: 'Chủ đề', boThu: 'Bộ thủ', loaiTu: 'Từ loại',
-    viDu: 'Đặt câu', ghiChu: 'Cách nhớ chữ', audio: 'Audio'
+    viDu: 'Đặt câu', ghiChu: 'Cách nhớ'
   },
   groupBy: ['Chủ đề', 'HSK', 'Từ loại', 'Bộ thủ'],
   lessonTab: 'Bài khoá',
@@ -467,11 +467,18 @@ function findRadMarkCol(table) {
 /* Tách bảng thành 2 kho: từ vựng và bộ thủ */
 function splitTable(table, map) {
   const mark = findRadMarkCol(table);
+  // Trước đây chỉ dò ô nào ghi chữ "bộ thủ". Cách đó phụ thuộc vào việc Sheet
+  // giữ nguyên chữ trong ô — đổi cách ghi hay đổi cột là cả kho bộ thủ biến
+  // mất mà không báo gì. Mã id BT-xxx do Apps Script cấp thì chắc chắn hơn,
+  // nên lấy nó làm dấu hiệu chính, ô chữ chỉ còn là đường lui.
+  const idc = table.cols.find(c => c && /^id$/i.test(String(c).trim()));
   const words = [], radRows = [], seen = {};
   table.rows.forEach(r => {
     const raw = {};
     table.cols.forEach((c, i) => { if (c) raw[c] = r[i] == null ? '' : r[i]; });
-    if (mark >= 0 && noAccent(r[mark]) === 'bo thu') { radRows.push(raw); return; }
+    const laBoThu = (mark >= 0 && noAccent(r[mark]) === 'bo thu') ||
+                    (idc && /^BT-\d+/i.test(String(raw[idc] || '').trim()));
+    if (laBoThu) { radRows.push(raw); return; }
     const w = mkWord(raw, map);
     if (!w.f.hanzi) return;
     if (seen[w.id]) w.id = w.id + '#' + (++seen[w.id]); else seen[w.id] = 1;
@@ -1985,20 +1992,18 @@ function hanDoi(w) {
   ]);
 }
 
-function showDetail(list, idx) {
-  closeAllModals();
-  const w = list[idx];
-  const st = state.prog[w.id];
-
+/* Bảng đầy đủ mọi cột có trong Sheet. Dùng cho cả thẻ chi tiết lẫn mặt sau
+   của thẻ flashcard, để hai nơi không bao giờ lệch nội dung nhau. */
+function rawTable(w) {
   const rows = [];
-  Object.keys(w.raw).forEach(c => {
+  Object.keys((w && w.raw) || {}).forEach(c => {
     if (/^id$/i.test(c.trim())) return;
     const v = w.raw[c];
     if (!v) return;
 
     // Ô kiểu <img src="..."> : ảnh trên mạng thì hiện ảnh, ảnh nằm trên máy thì
     // hiện nguyên văn đường dẫn — không bỏ đi, để không thiếu nội dung nào.
-    const img = v.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+    const img = String(v).match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
     let cell;
     if (img && /^https?:\/\//i.test(img[1])) {
       cell = el('td', {}, [el('img', { src: img[1], alt: c, class: 'dimg' })]);
@@ -2007,6 +2012,14 @@ function showDetail(list, idx) {
     }
     rows.push(el('tr', {}, [el('th', { text: c }), cell]));
   });
+  if (!rows.length) return null;
+  return el('table', { class: 'dtable' }, [el('tbody', {}, rows)]);
+}
+
+function showDetail(list, idx) {
+  closeAllModals();
+  const w = list[idx];
+  const st = state.prog[w.id];
 
   const body = el('div', { class: w.isPin ? 'detail--pin' : '' }, [
     el('div', { class: 'detail__top' }, [
@@ -2018,7 +2031,7 @@ function showDetail(list, idx) {
       ])
     ]),
     w.isPin ? drillTable(w) : null,
-    el('table', { class: 'dtable' }, [el('tbody', {}, rows)]),
+    rawTable(w),
     w.isRad ? radBlock(w) : null,
     (w.isRad || w.isPin) ? null : el('div', { class: 'srsbox', html:
       '<b>' + esc(STATE_VI[wordState(w.id)]) + '</b>' +
@@ -2252,8 +2265,130 @@ function curWord() { return findItem(state.sess.q[0]); }
 function cardDir() {
   const d = state.sess.dir;
   if (d !== 'mix') return d;
-  return ['h2m', 'm2h', 'a2m'][Math.floor(Math.random() * 3)];
+  return ['h2m', 'm2h', 'a2m', 'p2h'][Math.floor(Math.random() * 4)];
 }
+/* Ô viết tay: viết chữ Hán bằng ngón tay (hoặc chuột) vào khung kẻ ô kiểu
+   米字格 để căn nét. Từng nét lưu thành mảng điểm nên lùi được một nét mà
+   không phải xoá cả chữ. Lật thẻ thì chữ đúng hiện mờ ngay dưới nét viết để
+   đối chiếu. Mọi thao tác phải chặn nổi bọt, vì chạm vào thẻ là lật. */
+function writePad(chu) {
+  const chars = Array.from(String(chu || '')).filter(c => c.trim());
+  if (!chars.length) return null;
+
+  const o = [];          // mỗi ô một bộ nét riêng
+  const luot = [];       // thứ tự viết trên TOÀN BỘ các ô, để lùi đúng nét cuối
+  const hang = el('div', { class: 'wpad__hang' });
+
+  chars.forEach(() => {
+    const cv = el('canvas', { class: 'wpad__cv' });
+    const nen = el('div', { class: 'wpad__han' });
+    const m = { cv: cv, nen: nen, net: [], ctx: null, R: 1 };
+    o.push(m);
+    hang.appendChild(el('div', { class: 'wpad__o' }, [nen, cv]));
+  });
+
+  // 1 chữ thì ô to; nhiều chữ thì chia đều, quá 3 chữ mới xuống hàng
+  const cot = Math.min(chars.length, 3);
+  hang.style.gridTemplateColumns = 'repeat(' + cot + ', 1fr)';
+  hang.style.maxWidth = (cot === 1 ? 250 : cot * 150 + (cot - 1) * 10) + 'px';
+
+  const veKhung = m => {
+    const w = m.cv.width / m.R, h = m.cv.height / m.R;
+    m.ctx.clearRect(0, 0, w, h);
+    m.ctx.save();
+    m.ctx.setLineDash([5, 6]);
+    m.ctx.strokeStyle = 'rgba(140,100,230,.32)';
+    m.ctx.lineWidth = 1;
+    m.ctx.beginPath();
+    m.ctx.moveTo(w / 2, 0); m.ctx.lineTo(w / 2, h);
+    m.ctx.moveTo(0, h / 2); m.ctx.lineTo(w, h / 2);
+    m.ctx.moveTo(0, 0); m.ctx.lineTo(w, h);
+    m.ctx.moveTo(w, 0); m.ctx.lineTo(0, h);
+    m.ctx.stroke();
+    m.ctx.restore();
+  };
+  const veNet = m => {
+    const day = Math.max(4, (m.cv.width / m.R) * 0.032);
+    m.ctx.save();
+    m.ctx.strokeStyle = '#332e45'; m.ctx.fillStyle = '#332e45';
+    m.ctx.lineWidth = day; m.ctx.lineCap = 'round'; m.ctx.lineJoin = 'round';
+    m.net.forEach(n => {
+      if (!n.length) return;
+      if (n.length < 2) {           // chạm một cái thì thành dấu chấm
+        m.ctx.beginPath(); m.ctx.arc(n[0].x, n[0].y, day / 2, 0, Math.PI * 2); m.ctx.fill();
+        return;
+      }
+      m.ctx.beginPath();
+      m.ctx.moveTo(n[0].x, n[0].y);
+      n.forEach(d => m.ctx.lineTo(d.x, d.y));
+      m.ctx.stroke();
+    });
+    m.ctx.restore();
+  };
+  const veLai = m => { if (m.ctx) { veKhung(m); veNet(m); } };
+  const veHet = () => o.forEach(veLai);
+
+  const doKich = () => {
+    o.forEach(m => {
+      const r = m.cv.getBoundingClientRect();
+      if (!r.width) return;
+      m.R = window.devicePixelRatio || 1;
+      m.cv.width = Math.round(r.width * m.R);
+      m.cv.height = Math.round(r.height * m.R);
+      m.ctx = m.cv.getContext('2d');
+      m.ctx.scale(m.R, m.R);        // đặt sau khi gán width, vì gán width xoá hết
+      m.nen.style.fontSize = Math.round(r.height * 0.72) + 'px';
+      veLai(m);
+    });
+  };
+
+  o.forEach(m => {
+    let dang = null;
+    const diem = e => {
+      const r = m.cv.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    m.cv.addEventListener('pointerdown', e => {
+      e.stopPropagation(); e.preventDefault();
+      try { m.cv.setPointerCapture(e.pointerId); } catch (x) {}
+      dang = [diem(e)];
+      m.net.push(dang); luot.push(m);
+      veLai(m);
+    });
+    m.cv.addEventListener('pointermove', e => {
+      if (!dang) return;
+      e.stopPropagation(); e.preventDefault();
+      dang.push(diem(e)); veLai(m);
+    });
+    const xong = e => { if (dang) { e.stopPropagation(); dang = null; } };
+    m.cv.addEventListener('pointerup', xong);
+    m.cv.addEventListener('pointercancel', xong);
+  });
+
+  const nut = (nhan, ico, fn) => el('button', {
+    class: 'btn', onclick: e => { e.stopPropagation(); fn(); }
+  }, [icon(ico, 15), nhan]);
+
+  const box = el('div', { class: 'wpad', onclick: e => e.stopPropagation() }, [
+    hang,
+    el('div', { class: 'wpad__nut' }, [
+      // lùi nét cuối cùng dù nó nằm ở ô nào
+      nut('Lùi nét', 'left', () => {
+        const m = luot.pop();
+        if (m) { m.net.pop(); veLai(m); }
+      }),
+      nut('Xoá', 'trash', () => {
+        o.forEach(m => m.net.length = 0);
+        luot.length = 0;
+        veHet();
+      })
+    ])
+  ]);
+  setTimeout(doKich, 0);
+  window.addEventListener('resize', doKich);
+  return box;
+}
+
 function drawCard() {
   const s = state.sess;
   if (!s.q.length) return finishSession();
@@ -2271,13 +2406,18 @@ function drawCard() {
   if (s._dir === 'h2m') {
     front.appendChild(el('div', { class: 'q-han', text: w.f.hanzi }));
   } else if (s._dir === 'm2h') {
-    front.appendChild(el('div', { class: 'q-vi', text: w.f.nghiaViet }));
+    front.appendChild(el('div', { class: 'q-vi', text: meaningOnly(w.f.nghiaViet) }));
+  } else if (s._dir === 'p2h') {
+    front.appendChild(el('div', { class: 'q-py', text: w.f.pinyin }));
+    front.appendChild(el('div', { class: 'q-vi', text: meaningOnly(w.f.nghiaViet) }));
+    front.appendChild(writePad(w.f.hanzi));
   } else {
     front.appendChild(el('div', { class: 'q-audio' }, [icon('volume', 52)]));
     front.appendChild(el('div', { class: 'card__hint', text: 'Chạm để nghe lại' }));
     speak(spkText(w), w.f.audio);
   }
-  front.appendChild(el('div', { class: 'card__hint', text: 'Chạm vào thẻ để xem đáp án' }));
+  front.appendChild(el('div', { class: 'card__hint', text: s._dir === 'p2h'
+    ? 'Viết xong thì bấm Xem đáp án' : 'Chạm vào thẻ để xem đáp án' }));
 }
 function flipCard() {
   const s = state.sess;
@@ -2285,18 +2425,29 @@ function flipCard() {
   s.flipped = true;
   const w = curWord();
   const back = $('#cardBack'); back.innerHTML = '';
-  if (s._dir === 'm2h') back.appendChild(el('div', { class: 'a-han', text: w.f.hanzi }));
+  if (s._dir === 'm2h' || s._dir === 'p2h') back.appendChild(el('div', { class: 'a-han', text: w.f.hanzi }));
   if (w.isRad && w.r.name) back.appendChild(el('div', { class: 'a-name', text: w.r.name }));
   if (w.isPin) back.appendChild(el('div', { class: 'a-name', text: w.p.kind + ' · ' + w.p.group }));
   back.appendChild(el('div', { class: 'a-py', text: w.f.pinyin }));
-  if (s._dir !== 'm2h') back.appendChild(el('div', { class: 'a-vi', text: w.f.nghiaViet }));
+  if (s._dir !== 'm2h' && s._dir !== 'p2h') {
+    // Xếp theo dòng như thẻ chi tiết: dòng chữ Hán mới dùng font Hán, dòng
+    // tiếng Việt giữ font thường — để nguyên một khối thì cỡ chữ nhìn so le.
+    const vi = dongHan(w.f.nghiaViet);
+    vi.className = 'a-vi';
+    back.appendChild(vi);
+  }
   if (s._dir === 'a2m') back.appendChild(el('div', { class: 'a-han', text: w.f.hanzi }));
-  if (w.f.viDu) back.appendChild(el('div', { class: 'a-ex', html: '<span class="han">' + esc(w.f.viDu) + '</span>' + (w.f.nghiaViDu ? '<br>' + esc(w.f.nghiaViDu) : '') }));
-  if (w.f.ghiChu) back.appendChild(el('div', { class: 'a-note', text: w.f.ghiChu }));
   back.appendChild(el('div', { class: 'detail__spk' }, [
     el('button', { class: 'btn', onclick: e => { e.stopPropagation(); speak(spkText(w), w.f.audio); } }, [icon('volume'), 'Nghe'])
   ]));
+  // Đủ mọi cột trong Sheet, y như khi bấm vào thẻ ở kho từ. Ví dụ và ghi chú
+  // nằm sẵn trong bảng nên không dựng riêng nữa, tránh hiện hai lần.
+  const bang = rawTable(w);
+  if (bang) back.appendChild(el('div', { class: 'a-full' }, [bang]));
   back.hidden = false;
+  // Hiện chữ đúng mờ mờ ngay dưới nét vừa viết để soi xem lệch chỗ nào
+  const chu = Array.from(String(w.f.hanzi || ''));
+  $$('.wpad__han').forEach((n, k) => { n.textContent = chu[k] || ''; });
   $$('.card__hint', $('#cardFront')).forEach(h => h.hidden = true);
   $('#btnFlip').hidden = true;
   drawRateButtons();

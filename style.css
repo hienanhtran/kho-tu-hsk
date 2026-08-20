@@ -542,6 +542,9 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .dtable tr:last-child th,.dtable tr:last-child td{border-bottom:0}
 .dtable .han{font-family:var(--han); font-size:16px}
 .dimg{max-width:100%; height:auto; border-radius:10px; display:block}
+/* Bảng đủ cột ở mặt sau thẻ flashcard: tách khỏi phần đáp án bằng một vạch,
+   căn trái để đọc như bảng chứ không lệch theo kiểu căn giữa của thẻ. */
+.a-full{margin-top:18px; padding-top:6px; border-top:1px solid var(--line-2); text-align:left}
 .srsbox{border-radius:var(--r); padding:14px 16px; margin-top:18px; font-size:14px; color:var(--muted); box-shadow:none}
 .srsbox b{color:var(--text)}
 .navpair{display:flex; gap:8px; margin-right:auto}
@@ -614,10 +617,34 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .card__front{width:100%}
 .card__back{width:100%; border-top:1px dashed var(--line-2); margin-top:22px; padding-top:22px; animation:fade .22s}
 .q-han{font-family:var(--han); font-size:78px; line-height:1.15; font-weight:600; letter-spacing:.04em}
-.q-vi{font-size:22px; font-weight:600; line-height:1.4; white-space:pre-wrap; text-align:left}
+.q-vi{font-size:22px; font-weight:600; line-height:1.4; text-align:center}
 .q-audio{display:flex; justify-content:center; color:var(--accent); opacity:.85}
+.q-py{color:var(--pink); font-size:30px; font-weight:700; letter-spacing:.01em}
+
+/* Ô tập viết chữ Hán */
+.wpad{margin-top:20px; display:grid; gap:10px; justify-items:center; width:100%}
+/* Từ ghép mấy chữ thì bấy nhiêu ô, chia đều chiều ngang; số cột đặt bằng JS
+   theo số chữ, quá 3 chữ thì tự xuống hàng. */
+.wpad__hang{display:grid; gap:10px; width:100%; margin:0 auto}
+.wpad__o{
+  position:relative; aspect-ratio:1;
+  border:1px solid var(--line); border-radius:var(--r);
+  background:rgba(255,255,255,.74); overflow:hidden;
+}
+.wpad__han{
+  position:absolute; inset:0; display:grid; place-items:center;
+  font-family:var(--han); font-weight:600; line-height:1;
+  color:rgba(60,40,110,.15); user-select:none; pointer-events:none;
+}
+.wpad__cv{
+  position:relative; z-index:1; width:100%; height:100%; display:block;
+  touch-action:none;            /* không thì kéo ngón tay là cuộn trang */
+  cursor:crosshair;
+}
+.wpad__nut{display:flex; gap:8px}
+.wpad__nut .btn{padding:7px 13px; font-size:12.5px}
 .a-py{color:var(--pink); font-size:23px; font-weight:700}
-.a-vi{font-size:16px; margin-top:10px; white-space:pre-wrap; text-align:left; line-height:1.55}
+.a-vi{font-size:14px; margin-top:10px; text-align:left; line-height:1.6}
 .a-han{font-family:var(--han); font-size:54px; font-weight:600; line-height:1.2}
 /* Không đặt khung cuộn riêng ở đây: thẻ đã cuộn theo cả trang, thêm nữa là
    hiện hai thanh cuộn lồng nhau. */
@@ -636,9 +663,11 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 /* Thẻ âm tiết: chữ Latin nên dùng font giao diện, phần chữ Hán căn giữa cho cân */
 .card--pin .q-han{font-family:var(--ui); font-size:62px; color:var(--accent); letter-spacing:0}
 .card--pin .a-vi{
-  font-family:var(--han); font-size:34px; line-height:1.5;
+  font-family:var(--han); line-height:1.5;
   text-align:center; max-height:none; margin-top:16px;
 }
+.card--pin .a-vi .dvi__t,
+.card--pin .a-vi .dvi__han{font-family:var(--han); font-size:34px}
 .card--pin .a-ex{font-family:var(--han); font-size:19px; text-align:center; color:var(--muted)}
 
 /* Thẻ có ví dụ dài làm trang cao lên; thanh nút phải ghim lại nếu không sẽ
