@@ -643,6 +643,20 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 }
 .wpad__nut{display:flex; gap:8px}
 .wpad__nut .btn{padding:7px 13px; font-size:12.5px}
+
+/* Hoạt ảnh thứ tự nét (Hanzi Writer) — cùng kiểu khung với ô tập viết ở trên
+   nhưng không bo khung chéo, vì đây là chữ mẫu, không phải chỗ để viết. */
+.sbox{margin-top:14px; display:grid; gap:10px; justify-items:center; width:100%}
+.sbox__hang{display:grid; gap:10px; width:100%; max-width:340px; margin:0 auto}
+.sbox__o{
+  position:relative; aspect-ratio:1;
+  border:1px solid var(--line); border-radius:var(--r);
+  background:rgba(255,255,255,.74); overflow:hidden;
+  display:grid; place-items:center;
+}
+.sbox__o svg{width:100%; height:100%}
+.sbox__err{color:var(--muted); font-size:13px}
+.sbox .btn{padding:7px 13px; font-size:12.5px}
 .a-py{color:var(--pink); font-size:23px; font-weight:700}
 .a-vi{font-size:14px; margin-top:10px; text-align:left; line-height:1.6}
 .a-han{font-family:var(--han); font-size:54px; font-weight:600; line-height:1.2}

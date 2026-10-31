@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '34';
+const APP_VER = '37';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -1326,6 +1326,54 @@ function confirmBox(title, msg, okLabel, onOk, danger) {
   close = modalShell(title, body, [btnNo, btnOk]).close;
 }
 
+/* ═══ 6b. HOẠT ẢNH THỨ TỰ NÉT (Hanzi Writer) ═════════════════════
+   Vẽ hoạt ảnh nét chữ bằng SVG ngay trong trình duyệt — không dùng ảnh
+   GIF, không cần cột nào trong Sheet. Chỉ cần đúng chữ Hán đang có sẵn;
+   thư viện tự tải dữ liệu nét (JSON vài KB/chữ) qua CDN, có cache lại,
+   nên cần mạng lần đầu xem mỗi chữ. Thiếu thư viện (CDN chặn, mất mạng
+   khi tải trang) hoặc thiếu dữ liệu một chữ hiếm thì ô đó hiện dấu hỏi
+   thay vì vỡ cả khối hay báo lỗi khó hiểu. */
+function strokeBox(chu) {
+  if (typeof HanziWriter === 'undefined') return null;
+  const chars = Array.from(String(chu || '')).filter(c => (c.match(CJK_RE) || []).length);
+  if (!chars.length) return null;
+
+  const hang = el('div', { class: 'sbox__hang' });
+  hang.style.gridTemplateColumns = 'repeat(' + Math.min(chars.length, 4) + ', 1fr)';
+  const writers = [];
+  chars.forEach(ch => {
+    const slot = el('div', { class: 'sbox__o' });
+    hang.appendChild(slot);
+    try {
+      const w = HanziWriter.create(slot, ch, {
+        width: 100, height: 100, padding: 6,
+        showCharacter: false, strokeAnimationSpeed: 1, delayBetweenStrokes: 180,
+        strokeColor: '#5b3ea8', outlineColor: 'rgba(91,62,168,.22)',
+        onLoadCharDataError: () => slot.appendChild(el('div', { class: 'sbox__err', text: '?' }))
+      });
+      writers.push(w);
+      w.animateCharacter();
+    } catch (e) { slot.appendChild(el('div', { class: 'sbox__err', text: '?' })); }
+  });
+  if (!writers.length) return null;
+
+  const box = el('div', { class: 'sbox', onclick: e => e.stopPropagation() }, [
+    hang,
+    el('button', {
+      class: 'btn', onclick: e => { e.stopPropagation(); writers.forEach(w => { try { w.animateCharacter(); } catch (x) {} }); }
+    }, [icon('repeat', 15), 'Xem lại'])
+  ]);
+  box.replay = () => writers.forEach(w => { try { w.animateCharacter(); } catch (x) {} });
+  return box;
+}
+/* Bọc strokeBox kèm tiêu đề mục, dùng cho màn chi tiết. Không có dữ liệu
+   (thiếu thư viện, chữ không phải Hán) thì không hiện mục này luôn. */
+function strokeSection(chu) {
+  const b = strokeBox(chu);
+  if (!b) return null;
+  return el('div', {}, [el('div', { class: 'sechead', text: 'Thứ tự nét' }), b]);
+}
+
 /* ═══ 7. MÀN KHO TỪ ═════════════════════════════════════════════ */
 
 /* ─── BÀI KHOÁ ─────────────────────────────────────────────────────
@@ -2031,6 +2079,7 @@ function showDetail(list, idx) {
       ])
     ]),
     w.isPin ? drillTable(w) : null,
+    w.isPin ? null : strokeSection(w.f.hanzi),
     rawTable(w),
     w.isRad ? radBlock(w) : null,
     (w.isRad || w.isPin) ? null : el('div', { class: 'srsbox', html:
@@ -2368,6 +2417,7 @@ function writePad(chu) {
   const nut = (nhan, ico, fn) => el('button', {
     class: 'btn', onclick: e => { e.stopPropagation(); fn(); }
   }, [icon(ico, 15), nhan]);
+  let demo = null;   // hộp hoạt ảnh mẫu, dựng khi bấm "Xem mẫu" lần đầu
 
   const box = el('div', { class: 'wpad', onclick: e => e.stopPropagation() }, [
     hang,
@@ -2381,6 +2431,14 @@ function writePad(chu) {
         o.forEach(m => m.net.length = 0);
         luot.length = 0;
         veHet();
+      }),
+      // Xem mẫu: hoạt ảnh thứ tự nét, chỉ dựng khi bấm lần đầu (đỡ tải dữ
+      // liệu mạng cho chữ không ai xem) — bấm tiếp là xem lại, không dựng lại.
+      nut('Xem mẫu', 'repeat', () => {
+        if (demo) { demo.replay(); return; }
+        demo = strokeBox(chu);
+        if (!demo) { toast('Không có hoạt ảnh cho chữ này', 'err'); return; }
+        box.appendChild(demo);
       })
     ])
   ]);
@@ -2406,7 +2464,9 @@ function drawCard() {
   if (s._dir === 'h2m') {
     front.appendChild(el('div', { class: 'q-han', text: w.f.hanzi }));
   } else if (s._dir === 'm2h') {
+    // Giống kiểu luyện viết: hiện nghĩa + ô viết tay, bấm Xem đáp án mới lộ chữ.
     front.appendChild(el('div', { class: 'q-vi', text: meaningOnly(w.f.nghiaViet) }));
+    front.appendChild(writePad(w.f.hanzi));
   } else if (s._dir === 'p2h') {
     front.appendChild(el('div', { class: 'q-py', text: w.f.pinyin }));
     front.appendChild(el('div', { class: 'q-vi', text: meaningOnly(w.f.nghiaViet) }));
@@ -2415,9 +2475,11 @@ function drawCard() {
     front.appendChild(el('div', { class: 'q-audio' }, [icon('volume', 52)]));
     front.appendChild(el('div', { class: 'card__hint', text: 'Chạm để nghe lại' }));
     speak(spkText(w), w.f.audio);
+    front.appendChild(writePad(w.f.hanzi));
   }
-  front.appendChild(el('div', { class: 'card__hint', text: s._dir === 'p2h'
-    ? 'Viết xong thì bấm Xem đáp án' : 'Chạm vào thẻ để xem đáp án' }));
+  // Chỉ Chữ Hán → Nghĩa không có ô viết; ba kiểu còn lại đều viết xong mới bấm.
+  front.appendChild(el('div', { class: 'card__hint', text: s._dir === 'h2m'
+    ? 'Chạm vào thẻ để xem đáp án' : 'Viết xong thì bấm Xem đáp án' }));
 }
 function flipCard() {
   const s = state.sess;
@@ -2744,7 +2806,9 @@ function fillVoiceSelect() {
 function fillTabList(tabs) {
   const dl = $('#tabList'); if (!dl) return;
   dl.innerHTML = '';
-  tabs.filter(t => t !== 'Progress' && t !== '_config')
+  // tab phụ do Apps Script tạo, không phải nguồn dữ liệu ('Progress' là tên ở bản cũ)
+  const PHU = ['Tiến độ', 'Nhật ký học', '_config', 'Progress'];
+  tabs.filter(t => PHU.indexOf(t) < 0)
       .forEach(t => dl.appendChild(el('option', { value: t })));
 }
 function setStatus(node, msg, kind) {
@@ -3228,7 +3292,7 @@ function bind() {
   };
   $('#btnEnsure').onclick = async () => {
     const st = $('#webAppStatus');
-    confirmBox('Chuẩn hoá Sheet?', 'App sẽ thêm cột "id" vào bảng từ vựng (nếu chưa có) và tạo 2 tab phụ "Progress", "_config". Dữ liệu hiện có không bị đụng vào.', 'Làm luôn', async () => {
+    confirmBox('Chuẩn hoá Sheet?', 'App sẽ thêm cột "id" vào bảng từ vựng (nếu chưa có) và tạo 3 tab phụ "Tiến độ", "Nhật ký học", "_config". Dữ liệu hiện có không bị đụng vào.', 'Làm luôn', async () => {
       setStatus(st, 'Đang chuẩn hoá…', 'info');
       try {
         const r = await callApi('ensureSchema', {});
