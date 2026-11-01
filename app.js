@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '41';
+const APP_VER = '43';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -188,7 +188,7 @@ const PRESET = {
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
   map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '', gids: {},
-  sources: [], radTab: '',
+  sources: [], sourcesMode: 'auto', allTabs: [], radTab: '',
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
   settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto', backAll: true }
 };
@@ -202,15 +202,21 @@ function normalizeSettings(s) {
   if (!Array.isArray(s.backCols)) s.backCols = [];
   return s;
 }
-/* Sheet cũ chỉ có một tab (c.tab) — nâng lên dạng "sources" (nhiều tab gộp
-   lại) nhưng vẫn không phá cấu hình cũ. c.tab vẫn giữ vai trò "tab chính"
-   (dùng để khai báo cột), sources là toàn bộ các tab cần gộp khi tải dữ liệu. */
+/* Sheet cũ chỉ có một tab (c.tab) — nâng lên dạng nhiều tab gộp lại nhưng
+   vẫn không phá cấu hình cũ. c.tab vẫn giữ vai trò "tab chính" (dùng để
+   khai báo cột). sourcesMode 'auto' (mặc định): gộp MỌI tab trong file,
+   trừ các tab đã khai báo cho việc khác (bài khoá, ngữ pháp, bộ thủ, bảng
+   tra, nhật ký…) — Sheet thêm/bớt tab HSK nào cũng tự nhận, không cần sửa
+   gì. 'manual': chỉ gộp đúng những tab đã tick trong cfg.sources. */
 function normalizeCfg(c) {
-  if (!Array.isArray(c.sources) || !c.sources.length) {
-    c.sources = c.tab ? [c.tab] : [];
-  } else {
-    c.sources = c.sources.slice();
+  if (!Array.isArray(c.sources)) c.sources = c.tab ? [c.tab] : [];
+  if (c.sourcesMode !== 'manual' && c.sourcesMode !== 'auto') {
+    // cấu hình cũ (trước khi có chế độ auto) đã lưu nhiều hơn 1 tab tức là
+    // người dùng từng cố ý tick chọn tay — giữ nguyên ý đó, còn lại nâng
+    // lên chế độ auto cho khỏi phải cấu hình lại.
+    c.sourcesMode = c.sources.length > 1 ? 'manual' : 'auto';
   }
+  if (!Array.isArray(c.allTabs)) c.allTabs = [];
   if (typeof c.radTab !== 'string') c.radTab = '';
   return c;
 }
@@ -253,6 +259,7 @@ function loadState() {
     state.cfg.sheetId = PRESET.sheetId;
     state.cfg.tab = PRESET.tab;
     state.cfg.sources = (PRESET.sources || [PRESET.tab]).slice();
+    state.cfg.sourcesMode = 'auto';
     state.cfg.radTab = PRESET.radTab || '';
     state.cfg.map = Object.assign({}, PRESET.map);
     state.cfg.groupBy = PRESET.groupBy.slice();
@@ -2911,6 +2918,57 @@ function fillVoiceSelect() {
 }
 // tab phụ do Apps Script tạo, không phải nguồn dữ liệu ('Progress' là tên ở bản cũ)
 const PHU_TAB = ['Tiến độ', 'Nhật ký học', '_config', 'Progress'];
+const LESSON_HINTS = ['bài khoá', 'bai khoa', 'lesson'];
+const GRAM_HINTS = ['ngữ pháp', 'ngu phap', 'grammar'];
+function guessAuxTab(hints, tabs) {
+  let best = null;
+  tabs.forEach(t => {
+    if (best) return;
+    const n = noAccent(t);
+    if (hints.some(h => n.indexOf(noAccent(h)) > -1)) best = t;
+  });
+  return best;
+}
+/* Sheet chưa khai báo tab Bài khoá/Ngữ pháp (vd vừa đổi sang Sheet khác) thì
+   thử đoán theo tên tab có sẵn trong file — khớp thì tự điền, không khớp thì
+   thôi, người dùng vẫn gõ tay được ở mục "Gộp thêm tab khác". */
+function ensureAuxTabs(allTabs) {
+  if (!allTabs || !allTabs.length) return;
+  let changed = false;
+  if (!state.cfg.lessonTab) {
+    const g = guessAuxTab(LESSON_HINTS, allTabs);
+    if (g) { state.cfg.lessonTab = g; changed = true; }
+  }
+  if (!state.cfg.gramTab) {
+    const g = guessAuxTab(GRAM_HINTS, allTabs);
+    if (g) { state.cfg.gramTab = g; changed = true; }
+  }
+  if (changed) saveCfg();
+}
+/* Mọi tab trong file ĐÃ khai báo cho việc khác (bài khoá, ngữ pháp, bộ thủ
+   riêng, bảng tra, các tab phụ do Apps Script tạo) — chế độ auto sẽ loại các
+   tab này ra, còn lại coi là tab từ vựng, gộp hết. */
+function knownAuxTabs() {
+  const set = {};
+  [state.cfg.lessonTab, state.cfg.gramTab, state.cfg.logTab, state.cfg.radTab, (state.cfg.lookup || {}).tab]
+    .forEach(t => { t = String(t || '').trim(); if (t) set[t] = 1; });
+  PHU_TAB.forEach(t => set[t] = 1);
+  return set;
+}
+/* Hỏi Apps Script toàn bộ tên tab trong file (chỉ cần có Web App, không cần
+   bấm "Kiểm tra kết nối" riêng nữa) — cache lại để chế độ auto vẫn chạy được
+   cả khi không gọi được Apps Script lúc đó (mất mạng, script lỗi…). */
+async function discoverTabs(force) {
+  if (hasWrite() && (force || !state.cfg.allTabs || !state.cfg.allTabs.length)) {
+    try {
+      const r = await callApi('ping', {});
+      state.cfg.allTabs = r.tabs || [];
+      saveCfg();
+      fillTabList(state.cfg.allTabs);
+    } catch (e) { /* không gọi được thì dùng danh sách đã nhớ trước đó */ }
+  }
+  return state.cfg.allTabs || [];
+}
 let lastTabList = [];
 function fillTabList(tabs) {
   lastTabList = tabs || [];
@@ -2922,22 +2980,31 @@ function fillTabList(tabs) {
   }
   renderSourceTabs();
 }
-/* Mục "Gộp thêm tab khác": Sheet nào đã tách riêng từng cấp HSK (hay bất kỳ
-   lý do gì khác) ra nhiều tab thì tick thêm ở đây để gộp chung vào kho từ.
-   Tab chính (mục 1) luôn được tính, hiện khoá sẵn không tắt được. */
+/* Mục "Gộp thêm tab khác": mặc định (auto) gộp MỌI tab trong file trừ các
+   tab đã khai báo việc khác — Sheet thêm/bớt tab HSK nào cũng tự nhận.
+   Chọn "Chỉ gộp tab tôi tick" thì mới cần tick đúng những tab muốn gộp; tab
+   chính (mục 1) luôn được tính, hiện khoá sẵn không tắt được. */
 function renderSourceTabs() {
+  const modeManual = state.cfg.sourcesMode === 'manual';
+  const rAuto = $('#srcModeAuto'), rManual = $('#srcModeManual');
   const box = $('#sourceTabs'); if (!box) return;
+  if (rAuto) rAuto.checked = !modeManual;
+  if (rManual) rManual.checked = modeManual;
+  if (rAuto && rManual) rAuto.onchange = rManual.onchange = () => { box.hidden = !rManual.checked; };
+  $('#cfgLessonTab').value = state.cfg.lessonTab || '';
+  $('#cfgGramTab').value = state.cfg.gramTab || '';
+  const extra = $('#cfgExtraTabs'); if (extra) extra.value = '';
+  box.hidden = !modeManual;
   box.innerHTML = '';
+  if (!lastTabList.length) {
+    box.appendChild(el('p', { class: 'hint', text: 'Chưa dò được danh sách tab trong file (cần nối Web App ở mục 3). Gõ thẳng tên tab vào ô bên dưới vẫn chạy được, chỉ lưu ý gõ đúng tên — gõ sai Google Sheet không báo lỗi mà lặng lẽ lấy nhầm tab khác.' }));
+  }
   const primary = (state.cfg.tab || '').trim();
   const chosen = new Set(state.cfg.sources && state.cfg.sources.length ? state.cfg.sources : (primary ? [primary] : []));
   const names = lastTabList.filter(t => PHU_TAB.indexOf(t) < 0);
-  // tab đã lưu từ trước vẫn hiện ra dù chưa "Kiểm tra kết nối" lại để thấy danh sách mới
+  // tab đã lưu từ trước vẫn hiện ra dù chưa đọc lại danh sách tab mới nhất
   chosen.forEach(t => { if (names.indexOf(t) < 0) names.push(t); });
   if (primary && names.indexOf(primary) < 0) names.unshift(primary);
-  if (!names.length) {
-    box.appendChild(el('p', { class: 'hint', text: 'Bấm "Kiểm tra kết nối" ở mục 3 để thấy danh sách tab trong Sheet, hoặc đọc cấu trúc bảng ở trên trước.' }));
-    return;
-  }
   names.forEach(t => {
     const isPrimary = !!primary && t === primary;
     const ch = el('button', {
@@ -2951,11 +3018,20 @@ function renderSourceTabs() {
   });
 }
 function saveSources() {
-  const primary = (state.cfg.tab || '').trim();
-  const picked = $$('#sourceTabs .chip.is-on').map(c => c.getAttribute('data-tab'));
-  if (primary && picked.indexOf(primary) < 0) picked.unshift(primary);
-  state.cfg.sources = picked;
+  const mode = $('#srcModeManual').checked ? 'manual' : 'auto';
+  state.cfg.sourcesMode = mode;
+  if (mode === 'manual') {
+    const primary = (state.cfg.tab || '').trim();
+    const picked = $$('#sourceTabs .chip.is-on').map(c => c.getAttribute('data-tab'));
+    ($('#cfgExtraTabs').value || '').split(',').map(s => s.trim()).filter(Boolean).forEach(t => {
+      if (picked.indexOf(t) < 0) picked.push(t);
+    });
+    if (primary && picked.indexOf(primary) < 0) picked.unshift(primary);
+    state.cfg.sources = picked;
+  }
   state.cfg.radTab = $('#cfgRadTab').value.trim();
+  state.cfg.lessonTab = $('#cfgLessonTab').value.trim();
+  state.cfg.gramTab = $('#cfgGramTab').value.trim();
   saveCfg();
   setStatus($('#sourcesStatus'), 'Đã lưu, đang tải lại dữ liệu…', 'info');
   doSync(true);
@@ -3130,7 +3206,7 @@ async function readCols() {
     lastTable = t;
     state.cfg.sheetUrl = url; state.cfg.sheetId = id;
     state.cfg.tab = $('#cfgTab').value.trim(); state.cfg.gid = gid;
-    if (!state.cfg.sources || state.cfg.sources.indexOf(state.cfg.tab) < 0) {
+    if (state.cfg.sourcesMode === 'manual' && state.cfg.sources.indexOf(state.cfg.tab) < 0) {
       state.cfg.sources = [state.cfg.tab];
     }
     const map = (state.cfg.map && Object.keys(state.cfg.map).length && state.cfg.cols.join() === t.cols.join())
@@ -3143,6 +3219,11 @@ async function readCols() {
     $('#panelMap').hidden = false;
     renderDisplayCfg(t.cols);
     $('#panelDisplay').hidden = false;
+    // dò lại toàn bộ danh sách tab trong file (không cần bấm "Kiểm tra kết
+    // nối" riêng) để tick chọn thêm tab HSK khác và đoán luôn tab Bài khoá/
+    // Ngữ pháp nếu chưa khai báo.
+    const allTabs = await discoverTabs(true);
+    ensureAuxTabs(allTabs);
     renderSourceTabs();
     setStatus(st, 'Đọc được ' + t.cols.length + ' cột, ' + t.rows.length + ' dòng. Kiểm tra phần khai báo bên dưới rồi bấm Lưu.', 'ok');
     $('#panelMap').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3271,8 +3352,31 @@ function migrateProgIds(list) {
    nếu có khai báo, một tab Bộ thủ riêng (đọc trực tiếp bằng buildRadicals,
    giống hệt cách đọc bộ thủ nằm chung bảng từ vựng trước đây). Các tab từ
    vựng phải cùng cấu trúc cột với tab chính vì dùng chung một khai báo cột. */
-async function readWordSources() {
-  const tabs = (state.cfg.sources && state.cfg.sources.length) ? state.cfg.sources.slice() : [state.cfg.tab].filter(Boolean);
+async function readWordSources(allTabs) {
+  let tabs;
+  if (state.cfg.sourcesMode === 'manual' && state.cfg.sources.length) {
+    tabs = state.cfg.sources.slice();
+  } else {
+    const all = (allTabs && allTabs.length) ? allTabs : await discoverTabs();
+    const aux = knownAuxTabs();
+    tabs = all.filter(t => !aux[t]);
+    if (!tabs.length) tabs = [state.cfg.tab].filter(Boolean);
+  }
+  // Gõ sai tên tab thì gviz KHÔNG báo lỗi — nó lặng lẽ trả về một tab khác
+  // trong file, dễ gộp nhầm dữ liệu. Đã biết chắc danh sách tab thật (dò qua
+  // Web App) thì lọc bỏ ngay những tên không tồn tại, báo cho biết luôn.
+  const known = (allTabs && allTabs.length) ? allTabs : state.cfg.allTabs;
+  if (known && known.length) {
+    const bad = tabs.filter(t => t !== state.cfg.tab && known.indexOf(t) < 0);
+    if (bad.length) {
+      tabs = tabs.filter(t => t === state.cfg.tab || known.indexOf(t) > -1);
+      toast('Bỏ qua tab không có thật trong Sheet: ' + bad.join(', '), 'err');
+    }
+  }
+  // tab chính luôn đọc trước để dùng làm chuẩn khớp cột (repairMap) — thứ tự
+  // tab do Apps Script trả về không chắc đặt tab chính lên đầu.
+  const primary = (state.cfg.tab || '').trim();
+  if (primary) { const i = tabs.indexOf(primary); if (i > 0) { tabs.splice(i, 1); tabs.unshift(primary); } }
   if (!tabs.length) { const e = new Error('Chưa chọn tab nào chứa từ vựng ở mục 1.'); e.needsRemap = true; throw e; }
   const words = [], embeddedRads = [];
   const seen = {};
@@ -3315,7 +3419,9 @@ async function doSync(silent) {
   const ico = $('#syncIco'); ico.classList.add('is-spin');
   try {
     await flushQueue(true);
-    const src = await readWordSources();
+    const allTabs = await discoverTabs();
+    ensureAuxTabs(allTabs);
+    const src = await readWordSources(allTabs);
     state.cfg.cols = src.cols; saveCfg();
     const fresh = src.words;
     const d = diffWords(state.demo ? [] : state.words, fresh);
