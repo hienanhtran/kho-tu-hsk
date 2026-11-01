@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=39">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 
@@ -181,8 +181,26 @@
       <button class="btn btn--primary" id="btnSaveMap">Lưu khai báo &amp; tải dữ liệu</button>
     </div>
 
+    <div class="panel" id="panelDisplay" hidden>
+      <h3 class="panel__title">2b · Hiển thị thẻ học</h3>
+      <p class="hint">Không chọn gì thì giữ nguyên như mặc định của app. Có chọn thì đúng cột đã chọn mới hiện.</p>
+      <h4 class="sub">Mặt trước — theo từng kiểu học</h4>
+      <div id="frontCfg"></div>
+      <h4 class="sub">Mặt sau &amp; màn chi tiết</h4>
+      <div class="row" style="margin-bottom:12px">
+        <label class="chip" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer">
+          <input type="radio" name="backMode" id="backModeAll" style="margin:0"> Hiện tất cả cột (mặc định)
+        </label>
+        <label class="chip" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer">
+          <input type="radio" name="backMode" id="backModeSel" style="margin:0"> Chỉ hiện cột đã chọn, theo đúng thứ tự
+        </label>
+      </div>
+      <div id="backCfg"></div>
+      <button class="btn btn--primary" id="btnSaveDisplay">Lưu hiển thị</button>
+    </div>
+
     <div class="panel" id="panelLookup">
-      <h3 class="panel__title">2b · Gộp nhóm bằng bảng tra (tuỳ chọn)</h3>
+      <h3 class="panel__title">2c · Gộp nhóm bằng bảng tra (tuỳ chọn)</h3>
       <p class="hint">Bộ thủ trong bảng từ vựng thường ghi rời rạc nên nhóm ra hàng chục mục lẻ tẻ. Trỏ sang một tab khác trong cùng Sheet để gộp chúng thành vài phân loại lớn.</p>
       <label class="field field--block">
         <span class="field__lbl">Tab bảng tra</span>
@@ -282,6 +300,6 @@
      GIF hay cột nào trong Sheet — chỉ cần đúng chữ Hán đang có sẵn.
      Dữ liệu nét (JSON, vài KB/chữ) thư viện tự tải qua CDN khi cần. -->
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>

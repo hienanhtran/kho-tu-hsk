@@ -103,6 +103,7 @@ const ICONS = {
   left:    '<path d="M15 19 8 12l7-7"/>',
   right:   '<path d="M9 5l7 7-7 7"/>',
   down:    '<path d="M5.5 8.75 12 15.25l6.5-6.5"/>',
+  up:      '<path d="M5.5 15.25 12 8.75l6.5 6.5"/>',
   award:   '<circle cx="12" cy="9" r="6"/><path d="M8.2 14.2 7 22l5-2.8L17 22l-1.2-7.8"/>',
   inbox:   '<path d="M21.5 12.5h-5l-1.7 2.6H9.2l-1.7-2.6h-5"/><path d="M6.1 4.6 2.5 12.5v5a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2v-5l-3.6-7.9a2 2 0 0 0-1.8-1.1H7.9a2 2 0 0 0-1.8 1.1z"/>',
   edit:    '<path d="M12 20.5h9"/><path d="M16.6 3.4a2.1 2.1 0 0 1 3 3L7.3 18.7l-4 1 1-4z"/>',
@@ -155,7 +156,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '39';
+const APP_VER = '40';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -181,8 +182,18 @@ const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
   map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '', gids: {},
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
-  settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto' }
+  settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto', backAll: true }
 };
+/* frontCols/backCols chứa mảng — không được gán thẳng từ DEFAULT_CFG.settings
+   (Object.assign chỉ copy tham chiếu), nếu không mọi bản cfg sẽ dùng chung một
+   mảng và sửa chỗ này thì chỗ khác cũng đổi theo. Luôn dựng lại mới ở đây. */
+function normalizeSettings(s) {
+  s.frontCols = Object.assign({ h2m: [], m2h: [], p2h: [], a2m: [] }, s.frontCols || {});
+  ['h2m', 'm2h', 'p2h', 'a2m'].forEach(k => { if (!Array.isArray(s.frontCols[k])) s.frontCols[k] = []; });
+  if (typeof s.backAll !== 'boolean') s.backAll = true;
+  if (!Array.isArray(s.backCols)) s.backCols = [];
+  return s;
+}
 
 const state = {
   cfg: null, words: [], prog: {}, log: {}, queue: [], meta: {},
@@ -198,7 +209,7 @@ const LS = {
 
 function loadState() {
   state.cfg   = Object.assign({}, DEFAULT_CFG, LS.get(K.cfg, {}));
-  state.cfg.settings = Object.assign({}, DEFAULT_CFG.settings, state.cfg.settings || {});
+  state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, state.cfg.settings || {}));
   state.cfg.lookup = Object.assign({}, DEFAULT_CFG.lookup, state.cfg.lookup || {});
   state.lookupMap = LS.get(K.lookup, {});
   const rd = LS.get(K.rads, null);
@@ -2040,11 +2051,18 @@ function hanDoi(w) {
   ]);
 }
 
-/* Bảng đầy đủ mọi cột có trong Sheet. Dùng cho cả thẻ chi tiết lẫn mặt sau
-   của thẻ flashcard, để hai nơi không bao giờ lệch nội dung nhau. */
+/* Bảng cột hiện ở mặt sau thẻ flashcard lẫn màn chi tiết, để hai nơi không bao
+   giờ lệch nội dung nhau. Mặc định (backAll) thì lấy MỌI cột đang có trong
+   Sheet theo đúng thứ tự cột — nhỡ Sheet thêm/bớt cột cũng không ảnh hưởng gì,
+   không cần khai báo riêng. Người dùng có thể vào Cài đặt chọn đúng vài cột và
+   tự xếp thứ tự, lúc đó mới dùng backCols. */
 function rawTable(w) {
+  const s = state.cfg.settings || {};
+  const cols = (s.backAll === false && s.backCols && s.backCols.length)
+    ? s.backCols
+    : Object.keys((w && w.raw) || {});
   const rows = [];
-  Object.keys((w && w.raw) || {}).forEach(c => {
+  cols.forEach(c => {
     if (/^id$/i.test(c.trim())) return;
     const v = w.raw[c];
     if (!v) return;
@@ -2467,6 +2485,23 @@ function writePad(chu) {
   return box;
 }
 
+/* Cho mỗi kiểu học (h2m/m2h/p2h/a2m), người dùng có thể chọn hẳn những cột
+   Sheet nào muốn hiện ở mặt trước (Cài đặt → Hiển thị thẻ học). Không chọn
+   cột nào thì giữ nguyên nội dung mặc định như code dưới đây. Cột trùng cột
+   "Chữ Hán" thì hiện to như q-han, cột trùng "Nghĩa" thì rút gọn (meaningOnly)
+   cho mặt trước gọn như mặc định, còn lại hiện nguyên văn kiểu q-vi. */
+function renderFrontCols(front, w, cols) {
+  const map = state.cfg.map || {};
+  cols.forEach(c => {
+    const raw = w.raw[c];
+    if (!raw) return;
+    if (map.hanzi === c) { front.appendChild(el('div', { class: 'q-han', text: raw })); return; }
+    if (map.pinyin === c) { front.appendChild(el('div', { class: 'q-py', text: raw })); return; }
+    const node = dongHan(map.nghiaViet === c ? meaningOnly(raw) : raw);
+    node.className = 'q-vi';
+    front.appendChild(node);
+  });
+}
 function drawCard() {
   const s = state.sess;
   if (!s.q.length) return finishSession();
@@ -2481,22 +2516,30 @@ function drawCard() {
   $('#card').classList.toggle('card--pin', !!w.isPin);
 
   const front = $('#cardFront'); front.innerHTML = '';
-  if (s._dir === 'h2m') {
+  const coAudio = s._dir !== 'h2m' && s._dir !== 'm2h' && s._dir !== 'p2h';
+  if (coAudio) {
+    // Nghe rồi mới viết: icon + gợi ý "chạm để nghe lại" luôn giữ nguyên dù
+    // mặt trước có tuỳ chỉnh cột hay không, vì đây là thao tác chứ không
+    // phải nội dung để đọc.
+    front.appendChild(el('div', { class: 'q-audio' }, [icon('volume', 52)]));
+    front.appendChild(el('div', { class: 'card__hint', text: 'Chạm để nghe lại' }));
+    speak(spkText(w), w.f.audio);
+  }
+  const custom = (state.cfg.settings.frontCols || {})[s._dir];
+  if (custom && custom.length) {
+    renderFrontCols(front, w, custom);
+  } else if (s._dir === 'h2m') {
     front.appendChild(el('div', { class: 'q-han', text: w.f.hanzi }));
   } else if (s._dir === 'm2h') {
     // Giống kiểu luyện viết: hiện nghĩa + ô viết tay, bấm Xem đáp án mới lộ chữ.
     front.appendChild(el('div', { class: 'q-vi', text: meaningOnly(w.f.nghiaViet) }));
-    front.appendChild(writePad(w.f.hanzi));
   } else if (s._dir === 'p2h') {
     front.appendChild(el('div', { class: 'q-py', text: w.f.pinyin }));
     front.appendChild(el('div', { class: 'q-vi', text: meaningOnly(w.f.nghiaViet) }));
-    front.appendChild(writePad(w.f.hanzi));
-  } else {
-    front.appendChild(el('div', { class: 'q-audio' }, [icon('volume', 52)]));
-    front.appendChild(el('div', { class: 'card__hint', text: 'Chạm để nghe lại' }));
-    speak(spkText(w), w.f.audio);
-    front.appendChild(writePad(w.f.hanzi));
   }
+  // Ô viết tay là phần chức năng của 3 kiểu còn lại, giữ nguyên bất kể mặt
+  // trước đang hiện cột mặc định hay cột tuỳ chỉnh.
+  if (s._dir !== 'h2m') front.appendChild(writePad(w.f.hanzi));
   // Chỉ Chữ Hán → Nghĩa không có ô viết; ba kiểu còn lại đều viết xong mới bấm.
   front.appendChild(el('div', { class: 'card__hint', text: s._dir === 'h2m'
     ? 'Chạm vào thẻ để xem đáp án' : 'Viết xong thì bấm Xem đáp án' }));
@@ -2809,7 +2852,13 @@ function fillSettings() {
     setStatus($('#lookupStatus'),
       'Đã tìm thấy ' + state.rads.length + ' bộ thủ ngay trong bảng chính (các dòng có Chủ đề = "Bộ thủ") — không cần khai báo bảng tra ở đây.', 'ok');
   }
-  if (c.cols && c.cols.length) { lastTable = lastTable || { cols: c.cols, rows: [] }; renderMapRows(c.cols, c.map); $('#panelMap').hidden = false; }
+  if (c.cols && c.cols.length) {
+    lastTable = lastTable || { cols: c.cols, rows: [] };
+    renderMapRows(c.cols, c.map);
+    $('#panelMap').hidden = false;
+    renderDisplayCfg(c.cols);
+    $('#panelDisplay').hidden = false;
+  }
 }
 function fillVoiceSelect() {
   const sel = $('#cfgVoice'); if (!sel) return;
@@ -2907,6 +2956,88 @@ function renderColList(cols, map) {
   if (t) t.textContent = 'Tất cả cột trong Sheet (' + cols.filter(Boolean).length + ')';
 }
 
+/* ── Hiển thị thẻ học: chọn cột cho mặt trước (theo từng kiểu học) và mặt
+   sau/chi tiết (chọn + xếp thứ tự). Không đụng gì tới phần khai báo cột ở
+   trên — hai việc độc lập nhau, khai báo chỉ để app biết cột nào là Chữ Hán /
+   Pinyin / Nghĩa…, còn đây là chọn cột nào ĐƯỢC NHÌN THẤY, ở đâu. ───────── */
+const DIRS = [
+  { key: 'h2m', label: 'Chữ Hán → Nghĩa' },
+  { key: 'm2h', label: 'Nghĩa → Viết chữ Hán' },
+  { key: 'p2h', label: 'Pinyin → Viết chữ Hán' },
+  { key: 'a2m', label: 'Nghe → Viết chữ Hán' }
+];
+function renderDisplayCfg(cols) {
+  const box = $('#frontCfg'); if (!box) return;
+  box.innerHTML = '';
+  const s = state.cfg.settings;
+  const showCols = cols.filter(c => c && !/^id$/i.test(c.trim()));
+  DIRS.forEach(d => {
+    const chosen = new Set(s.frontCols[d.key] || []);
+    const chips = el('div', { class: 'chips' });
+    showCols.forEach(c => {
+      const ch = el('button', { type: 'button', class: 'chip' + (chosen.has(c) ? ' is-on' : ''), text: c, 'data-col': c });
+      ch.onclick = () => ch.classList.toggle('is-on');
+      chips.appendChild(ch);
+    });
+    box.appendChild(el('div', { class: 'dispdir', 'data-dir': d.key }, [
+      el('div', { class: 'dispdir__lbl', text: d.label }),
+      chips
+    ]));
+  });
+
+  const all = $('#backModeAll'), sel = $('#backModeSel');
+  all.checked = s.backAll !== false;
+  sel.checked = s.backAll === false;
+  renderBackColsUI(showCols);
+  $('#backCfg').hidden = all.checked;
+  all.onchange = sel.onchange = () => { $('#backCfg').hidden = all.checked; };
+}
+function renderBackColsUI(cols) {
+  const box = $('#backCfg'); if (!box) return;
+  box.innerHTML = '';
+  const s = state.cfg.settings;
+  // Cột đã chọn trước đó giữ nguyên thứ tự đã lưu, cột còn lại nối thêm vào
+  // cuối theo thứ tự Sheet để chọn tiếp cũng tiện.
+  const order = (s.backCols || []).filter(c => cols.indexOf(c) > -1);
+  cols.forEach(c => { if (order.indexOf(c) < 0) order.push(c); });
+  const chosen = new Set(s.backCols || []);
+
+  const list = el('div', { class: 'ordlist' });
+  const redraw = () => {
+    list.innerHTML = '';
+    order.forEach((c, i) => {
+      const cb = el('input', { type: 'checkbox' });
+      cb.checked = chosen.has(c);
+      cb.onchange = () => { cb.checked ? chosen.add(c) : chosen.delete(c); };
+      list.appendChild(el('div', { class: 'ordrow' }, [
+        el('label', { class: 'ordrow__chk' }, [cb, el('span', { text: c })]),
+        el('div', { class: 'ordrow__mv' }, [
+          el('button', { type: 'button', class: 'btn btn--icon', disabled: i === 0,
+            onclick: () => { order.splice(i - 1, 0, order.splice(i, 1)[0]); redraw(); } }, [icon('up', 14)]),
+          el('button', { type: 'button', class: 'btn btn--icon', disabled: i === order.length - 1,
+            onclick: () => { order.splice(i + 1, 0, order.splice(i, 1)[0]); redraw(); } }, [icon('down', 14)])
+        ])
+      ]));
+    });
+  };
+  redraw();
+  box.appendChild(el('p', { class: 'hint', text: 'Tick cột muốn hiện ở mặt sau/chi tiết, dùng mũi tên để xếp thứ tự. Cột không tick vẫn được giữ nguyên trong dữ liệu, chỉ là không hiện ra.' }));
+  box.appendChild(list);
+  box._state = () => order.filter(c => chosen.has(c));
+}
+function saveDisplayCfg() {
+  const front = {};
+  $$('#frontCfg .dispdir').forEach(w => {
+    front[w.getAttribute('data-dir')] = $$('.chip.is-on', w).map(c => c.getAttribute('data-col'));
+  });
+  state.cfg.settings.frontCols = front;
+  state.cfg.settings.backAll = $('#backModeAll').checked;
+  const bc = $('#backCfg');
+  state.cfg.settings.backCols = (!state.cfg.settings.backAll && bc._state) ? bc._state() : (state.cfg.settings.backCols || []);
+  saveCfg();
+  toast('Đã lưu cách hiển thị', 'ok');
+}
+
 async function readCols() {
   const url = $('#cfgUrl').value.trim();
   const id = parseSheetId(url);
@@ -2927,6 +3058,8 @@ async function readCols() {
     state.cfg.cols = t.cols; saveCfg();
     renderMapRows(t.cols, map);
     $('#panelMap').hidden = false;
+    renderDisplayCfg(t.cols);
+    $('#panelDisplay').hidden = false;
     setStatus(st, 'Đọc được ' + t.cols.length + ' cột, ' + t.rows.length + ' dòng. Kiểm tra phần khai báo bên dưới rồi bấm Lưu.', 'ok');
     $('#panelMap').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
@@ -2967,7 +3100,7 @@ function readHashCfg() {
   try {
     const c = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
     state.cfg = Object.assign({}, DEFAULT_CFG, c);
-    state.cfg.settings = Object.assign({}, DEFAULT_CFG.settings, c.settings || {});
+    state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, c.settings || {}));
     saveCfg();
     history.replaceState(null, '', location.pathname + location.search);
     return true;
@@ -2984,7 +3117,7 @@ function importBackup(file) {
   fr.onload = () => {
     try {
       const d = JSON.parse(fr.result);
-      if (d.cfg) { state.cfg = Object.assign({}, DEFAULT_CFG, d.cfg); state.cfg.settings = Object.assign({}, DEFAULT_CFG.settings, d.cfg.settings || {}); saveCfg(); }
+      if (d.cfg) { state.cfg = Object.assign({}, DEFAULT_CFG, d.cfg); state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, d.cfg.settings || {})); saveCfg(); }
       if (d.prog) { state.prog = d.prog; saveProg(); }
       if (d.log) { state.log = d.log; saveLog(); }
       toast('Đã nhập sao lưu', 'ok');
@@ -3270,6 +3403,7 @@ function bind() {
     saveCfg(); renderKho();
   };
   $('#btnSaveMap').onclick = saveMapping;
+  $('#btnSaveDisplay').onclick = saveDisplayCfg;
   $('#cfgWebApp').onchange = () => { state.cfg.webApp = $('#cfgWebApp').value.trim(); saveCfg(); };
   $('#cfgNew').onchange = () => { state.cfg.settings.newPerDay = +$('#cfgNew').value || 0; saveCfg(); };
   $('#cfgMaxRev').onchange = () => { state.cfg.settings.maxReview = +$('#cfgMaxRev').value || 120; saveCfg(); };
