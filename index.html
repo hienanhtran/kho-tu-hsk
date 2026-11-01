@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
 
@@ -167,6 +167,15 @@
       </label>
       <button class="btn btn--primary" id="btnReadCols">Đọc cấu trúc bảng</button>
       <div id="colsStatus" class="status"></div>
+      <h4 class="sub">Gộp thêm tab khác (tuỳ chọn)</h4>
+      <p class="hint">Sheet đã tách riêng từng cấp HSK ra mỗi tab? Tick thêm các tab cùng chứa từ vựng (cùng cấu trúc cột với tab chính ở trên) để gộp chung vào kho từ.</p>
+      <div id="sourceTabs" class="chips"></div>
+      <label class="field field--block" style="margin-top:12px">
+        <span class="field__lbl">Tab Bộ thủ riêng (để trống nếu bộ thủ nằm chung bảng từ vựng)</span>
+        <input id="cfgRadTab" type="text" list="tabList" placeholder="Bộ thủ">
+      </label>
+      <button class="btn" id="btnSaveSources">Lưu nguồn &amp; tải lại dữ liệu</button>
+      <div id="sourcesStatus" class="status"></div>
     </div>
 
     <div class="panel" id="panelMap" hidden>
@@ -300,6 +309,6 @@
      GIF hay cột nào trong Sheet — chỉ cần đúng chữ Hán đang có sẵn.
      Dữ liệu nét (JSON, vài KB/chữ) thư viện tự tải qua CDN khi cần. -->
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 </body>
 </html>

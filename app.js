@@ -145,7 +145,8 @@ const FIELDS = [
   { key: 'nghiaViDu', label: 'Nghĩa ví dụ',       hints: ['nghĩa ví dụ', 'dịch ví dụ', 'example meaning', 'nghĩa câu'] },
   { key: 'ghiChu',    label: 'Ghi chú / mẹo nhớ', hints: ['cách nhớ', 'cach nho', 'mẹo nhớ', 'ghi chú', 'ghi chu', 'note', 'chú thích', 'mẹo'] },
   { key: 'audio',     label: 'File/link phát âm', hints: ['audio', 'âm thanh', 'am thanh', 'sound', 'mp3'] },
-  { key: 'ngayHoc',   label: 'Ngày học',          hints: ['ngày', 'ngay', 'date', 'timestamp', 'dấu thời gian', 'thời gian'] }
+  { key: 'ngayHoc',   label: 'Ngày học',          hints: ['ngày', 'ngay', 'date', 'timestamp', 'dấu thời gian', 'thời gian'] },
+  { key: 'duyet',     label: 'Cột duyệt (đánh dấu đã sửa)', hints: ['duyệt', 'duyet', 'đã duyệt', 'review', 'approved', 'checked', 'xác nhận'] }
 ];
 
 /* ─────────────────────────────────────────────────────────────────
@@ -156,12 +157,18 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '40';
+const APP_VER = '41';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
   sheetId:  '1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds',
   tab:      'HSK 1',
+  // Nhiều Sheet mới tách riêng mỗi cấp HSK ra một tab — khai báo thêm ở đây
+  // (hoặc tick thêm trong Cài đặt) để gộp chung vào kho từ.
+  sources:  ['HSK 1'],
+  // Tab Bộ thủ riêng (nếu Sheet đã tách khỏi bảng từ vựng). Để trống thì app
+  // vẫn tự dò bộ thủ nằm chung bảng từ vựng như trước.
+  radTab:   '',
   // Cột nào là gì. Sheet đổi tên cột thì app tự dò lại nên không sợ hỏng.
   map: {
     hanzi: 'Chữ hán', pinyin: 'Pinyin', nghiaViet: 'Nghĩa', hsk: 'HSK',
@@ -181,6 +188,7 @@ const PRESET = {
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
   map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '', gids: {},
+  sources: [], radTab: '',
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
   settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto', backAll: true }
 };
@@ -193,6 +201,18 @@ function normalizeSettings(s) {
   if (typeof s.backAll !== 'boolean') s.backAll = true;
   if (!Array.isArray(s.backCols)) s.backCols = [];
   return s;
+}
+/* Sheet cũ chỉ có một tab (c.tab) — nâng lên dạng "sources" (nhiều tab gộp
+   lại) nhưng vẫn không phá cấu hình cũ. c.tab vẫn giữ vai trò "tab chính"
+   (dùng để khai báo cột), sources là toàn bộ các tab cần gộp khi tải dữ liệu. */
+function normalizeCfg(c) {
+  if (!Array.isArray(c.sources) || !c.sources.length) {
+    c.sources = c.tab ? [c.tab] : [];
+  } else {
+    c.sources = c.sources.slice();
+  }
+  if (typeof c.radTab !== 'string') c.radTab = '';
+  return c;
 }
 
 const state = {
@@ -211,6 +231,7 @@ function loadState() {
   state.cfg   = Object.assign({}, DEFAULT_CFG, LS.get(K.cfg, {}));
   state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, state.cfg.settings || {}));
   state.cfg.lookup = Object.assign({}, DEFAULT_CFG.lookup, state.cfg.lookup || {});
+  normalizeCfg(state.cfg);
   state.lookupMap = LS.get(K.lookup, {});
   const rd = LS.get(K.rads, null);
   state.rads = (rd && rd.rads) || [];
@@ -231,6 +252,8 @@ function loadState() {
     state.cfg.sheetUrl = PRESET.sheetUrl;
     state.cfg.sheetId = PRESET.sheetId;
     state.cfg.tab = PRESET.tab;
+    state.cfg.sources = (PRESET.sources || [PRESET.tab]).slice();
+    state.cfg.radTab = PRESET.radTab || '';
     state.cfg.map = Object.assign({}, PRESET.map);
     state.cfg.groupBy = PRESET.groupBy.slice();
     state.cfg.lessonTab = PRESET.lessonTab || '';
@@ -1948,10 +1971,19 @@ function gridOf(words) {
   words.forEach(w => g.appendChild(wordCard(w)));
   return g;
 }
+/* "checked"/"true"/"x"/"✔"/"có"/"1" trong cột duyệt coi là đã duyệt — gõ kiểu
+   gì trong Sheet cũng nhận ra, không bắt đúng chữ "checked". */
+function laDaDuyet(v) { return /^(checked|true|x|✔|✓|có|co|1|yes|da duyet|đã duyệt)$/i.test(noAccent(String(v || '').trim())); }
 function wordCard(w) {
   const hocDuoc = !w.isRad && !w.isPin;
+  const duyetCol = !w.isRad && !w.isPin && state.cfg.map && state.cfg.map.duyet;
+  const daDuyet = duyetCol ? laDaDuyet(w.raw[duyetCol]) : null;
   return el('div', { class: 'wcard' + (w.isPin ? ' wcard--pin' : ''), onclick: () => openDetail(w.id) }, [
     hocDuoc ? el('span', { class: 'wcard__dot dot-' + wordState(w.id) }) : null,
+    duyetCol ? el('span', {
+      class: 'wcard__chk ' + (daDuyet ? 'is-on' : 'is-off'),
+      title: daDuyet ? 'Đã duyệt' : 'Chưa duyệt', text: daDuyet ? '✓' : '!'
+    }) : null,
     el('button', {
       class: 'wcard__spk', title: 'Phát âm',
       onclick: e => { e.stopPropagation(); speak(spkText(w), w.f.audio); }
@@ -2151,6 +2183,9 @@ function openWordForm(word) {
     Object.keys(inputs).forEach(c => row[c] = inputs[c].value.trim());
     const hCol = state.cfg.map.hanzi;
     if (hCol && !row[hCol]) { toast('Chưa nhập chữ Hán', 'err'); return; }
+    // Sửa một từ đã có thì tự ghi "checked" vào cột duyệt (nếu có khai báo)
+    // để biết từ này đã được xem/sửa qua, khỏi phải tick tay trong Sheet.
+    if (word && state.cfg.map.duyet) row[state.cfg.map.duyet] = 'checked';
     close();
     await upsertWord(word ? word.id : '', row);
   };
@@ -2847,7 +2882,9 @@ function fillSettings() {
   $('#cfgMinGroup').value = c.settings.minGroup || 0;
   $('#cfgTts').value = c.settings.tts || 'auto';
   $('#lkTab').value = c.lookup.tab || '';
+  $('#cfgRadTab').value = c.radTab || '';
   fillVoiceSelect();
+  renderSourceTabs();
   if (state.rads.length) {
     setStatus($('#lookupStatus'),
       'Đã tìm thấy ' + state.rads.length + ' bộ thủ ngay trong bảng chính (các dòng có Chủ đề = "Bộ thủ") — không cần khai báo bảng tra ở đây.', 'ok');
@@ -2872,13 +2909,56 @@ function fillVoiceSelect() {
   if (!zh.length) setStatus(st, 'Chưa tìm thấy giọng tiếng Trung trên máy. Windows: Cài đặt → Thời gian & ngôn ngữ → Ngôn ngữ → Thêm 中文(简体) kèm gói giọng nói. Trong lúc chờ, app dùng giọng dự phòng qua mạng.', 'info');
   else setStatus(st, 'Tìm thấy ' + zh.length + ' giọng tiếng Trung.', 'ok');
 }
+// tab phụ do Apps Script tạo, không phải nguồn dữ liệu ('Progress' là tên ở bản cũ)
+const PHU_TAB = ['Tiến độ', 'Nhật ký học', '_config', 'Progress'];
+let lastTabList = [];
 function fillTabList(tabs) {
-  const dl = $('#tabList'); if (!dl) return;
-  dl.innerHTML = '';
-  // tab phụ do Apps Script tạo, không phải nguồn dữ liệu ('Progress' là tên ở bản cũ)
-  const PHU = ['Tiến độ', 'Nhật ký học', '_config', 'Progress'];
-  tabs.filter(t => PHU.indexOf(t) < 0)
-      .forEach(t => dl.appendChild(el('option', { value: t })));
+  lastTabList = tabs || [];
+  const dl = $('#tabList');
+  if (dl) {
+    dl.innerHTML = '';
+    lastTabList.filter(t => PHU_TAB.indexOf(t) < 0)
+        .forEach(t => dl.appendChild(el('option', { value: t })));
+  }
+  renderSourceTabs();
+}
+/* Mục "Gộp thêm tab khác": Sheet nào đã tách riêng từng cấp HSK (hay bất kỳ
+   lý do gì khác) ra nhiều tab thì tick thêm ở đây để gộp chung vào kho từ.
+   Tab chính (mục 1) luôn được tính, hiện khoá sẵn không tắt được. */
+function renderSourceTabs() {
+  const box = $('#sourceTabs'); if (!box) return;
+  box.innerHTML = '';
+  const primary = (state.cfg.tab || '').trim();
+  const chosen = new Set(state.cfg.sources && state.cfg.sources.length ? state.cfg.sources : (primary ? [primary] : []));
+  const names = lastTabList.filter(t => PHU_TAB.indexOf(t) < 0);
+  // tab đã lưu từ trước vẫn hiện ra dù chưa "Kiểm tra kết nối" lại để thấy danh sách mới
+  chosen.forEach(t => { if (names.indexOf(t) < 0) names.push(t); });
+  if (primary && names.indexOf(primary) < 0) names.unshift(primary);
+  if (!names.length) {
+    box.appendChild(el('p', { class: 'hint', text: 'Bấm "Kiểm tra kết nối" ở mục 3 để thấy danh sách tab trong Sheet, hoặc đọc cấu trúc bảng ở trên trước.' }));
+    return;
+  }
+  names.forEach(t => {
+    const isPrimary = !!primary && t === primary;
+    const ch = el('button', {
+      type: 'button',
+      class: 'chip' + ((isPrimary || chosen.has(t)) ? ' is-on' : '') + (isPrimary ? ' is-locked' : ''),
+      text: t + (isPrimary ? ' (tab chính)' : ''),
+      'data-tab': t
+    });
+    if (!isPrimary) ch.onclick = () => ch.classList.toggle('is-on');
+    box.appendChild(ch);
+  });
+}
+function saveSources() {
+  const primary = (state.cfg.tab || '').trim();
+  const picked = $$('#sourceTabs .chip.is-on').map(c => c.getAttribute('data-tab'));
+  if (primary && picked.indexOf(primary) < 0) picked.unshift(primary);
+  state.cfg.sources = picked;
+  state.cfg.radTab = $('#cfgRadTab').value.trim();
+  saveCfg();
+  setStatus($('#sourcesStatus'), 'Đã lưu, đang tải lại dữ liệu…', 'info');
+  doSync(true);
 }
 function setStatus(node, msg, kind) {
   node.className = 'status is-on ' + (kind || 'info');
@@ -3050,6 +3130,9 @@ async function readCols() {
     lastTable = t;
     state.cfg.sheetUrl = url; state.cfg.sheetId = id;
     state.cfg.tab = $('#cfgTab').value.trim(); state.cfg.gid = gid;
+    if (!state.cfg.sources || state.cfg.sources.indexOf(state.cfg.tab) < 0) {
+      state.cfg.sources = [state.cfg.tab];
+    }
     const map = (state.cfg.map && Object.keys(state.cfg.map).length && state.cfg.cols.join() === t.cols.join())
       ? state.cfg.map : guessMap(t.cols);
     if (!state.cfg.groupBy || !state.cfg.groupBy.length) {
@@ -3060,6 +3143,7 @@ async function readCols() {
     $('#panelMap').hidden = false;
     renderDisplayCfg(t.cols);
     $('#panelDisplay').hidden = false;
+    renderSourceTabs();
     setStatus(st, 'Đọc được ' + t.cols.length + ' cột, ' + t.rows.length + ' dòng. Kiểm tra phần khai báo bên dưới rồi bấm Lưu.', 'ok');
     $('#panelMap').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
@@ -3101,6 +3185,7 @@ function readHashCfg() {
     const c = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
     state.cfg = Object.assign({}, DEFAULT_CFG, c);
     state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, c.settings || {}));
+    normalizeCfg(state.cfg);
     saveCfg();
     history.replaceState(null, '', location.pathname + location.search);
     return true;
@@ -3117,7 +3202,7 @@ function importBackup(file) {
   fr.onload = () => {
     try {
       const d = JSON.parse(fr.result);
-      if (d.cfg) { state.cfg = Object.assign({}, DEFAULT_CFG, d.cfg); state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, d.cfg.settings || {})); saveCfg(); }
+      if (d.cfg) { state.cfg = Object.assign({}, DEFAULT_CFG, d.cfg); state.cfg.settings = normalizeSettings(Object.assign({}, DEFAULT_CFG.settings, d.cfg.settings || {})); normalizeCfg(state.cfg); saveCfg(); }
       if (d.prog) { state.prog = d.prog; saveProg(); }
       if (d.log) { state.log = d.log; saveLog(); }
       toast('Đã nhập sao lưu', 'ok');
@@ -3181,22 +3266,58 @@ function migrateProgIds(list) {
 
 /* ═══ 12. ĐỒNG BỘ ═══════════════════════════════════════════════ */
 
+/* Đọc hợp nhất mọi tab chứa từ vựng (mục "Nguồn dữ liệu" trong Cài đặt —
+   Sheet nào đã tách riêng từng cấp HSK ra tab riêng thì tick thêm ở đó) và,
+   nếu có khai báo, một tab Bộ thủ riêng (đọc trực tiếp bằng buildRadicals,
+   giống hệt cách đọc bộ thủ nằm chung bảng từ vựng trước đây). Các tab từ
+   vựng phải cùng cấu trúc cột với tab chính vì dùng chung một khai báo cột. */
+async function readWordSources() {
+  const tabs = (state.cfg.sources && state.cfg.sources.length) ? state.cfg.sources.slice() : [state.cfg.tab].filter(Boolean);
+  if (!tabs.length) { const e = new Error('Chưa chọn tab nào chứa từ vựng ở mục 1.'); e.needsRemap = true; throw e; }
+  const words = [], embeddedRads = [];
+  const seen = {};
+  let cols = null;
+  for (let i = 0; i < tabs.length; i++) {
+    const tab = tabs[i];
+    const gid = (tab === state.cfg.tab) ? state.cfg.gid : '';
+    const t = await readSheet(state.cfg.sheetId, tab, gid);
+    if (i === 0) {
+      const fix = repairMap(t.cols);
+      if (!fix.ok) {
+        const e = new Error('Tab "' + tab + '" thiếu cột: ' + fix.missing.join(', ') + '. Khai báo lại ở Cài đặt.');
+        e.needsRemap = true; throw e;
+      }
+      cols = t.cols;
+    }
+    const split = splitTable(t, state.cfg.map);
+    split.words.forEach(w => {
+      if (seen[w.id]) w.id = w.id + '#' + (++seen[w.id]); else seen[w.id] = 1;
+      words.push(w);
+    });
+    embeddedRads.push.apply(embeddedRads, split.rads);
+  }
+  let rads = embeddedRads;
+  const radTab = (state.cfg.radTab || '').trim();
+  if (radTab) {
+    const rt = await readSheet(state.cfg.sheetId, radTab, '');
+    const rawRows = rt.rows.map(r => {
+      const raw = {}; rt.cols.forEach((c, i) => { if (c) raw[c] = r[i] == null ? '' : r[i]; }); return raw;
+    });
+    const built = buildRadicals(rt.cols, rawRows, state.cfg.map);
+    if (built.length) rads = embeddedRads.concat(built);
+  }
+  return { cols: cols || [], words: words, rads: rads };
+}
+
 async function doSync(silent) {
   if (!state.cfg.sheetId) { go('caidat'); if (!silent) toast('Chưa nối Google Sheet — khai báo ở mục 1', 'err'); return; }
   if (!state.cfg.map || !state.cfg.map.hanzi) { go('caidat'); if (!silent) toast('Chưa khai báo cột', 'err'); return; }
   const ico = $('#syncIco'); ico.classList.add('is-spin');
   try {
     await flushQueue(true);
-    const t = await readSheet(state.cfg.sheetId, state.cfg.tab, state.cfg.gid);
-    const fix = repairMap(t.cols);
-    if (!fix.ok) {
-      toast('Sheet đã đổi cấu trúc, không tìm thấy cột: ' + fix.missing.join(', ') + '. Khai báo lại ở Cài đặt.', 'err');
-      go('caidat');
-      return;
-    }
-    state.cfg.cols = t.cols; saveCfg();
-    const split = splitTable(t, state.cfg.map);
-    const fresh = split.words;
+    const src = await readWordSources();
+    state.cfg.cols = src.cols; saveCfg();
+    const fresh = src.words;
     const d = diffWords(state.demo ? [] : state.words, fresh);
 
     // chụp lại kho trước khi thay để biết lần này thêm những gì
@@ -3212,10 +3333,9 @@ async function doSync(silent) {
       try { await stampNewAt(); } catch (e) { /* thiếu tab nhật ký thì bỏ qua */ }
       try { await pullGids(); } catch (e) { /* bản Apps Script cũ thì bỏ qua */ }
     }
-    // bộ thủ nằm ngay trong bảng chính; chỉ khi không có mới đi tìm ở tab riêng
     try { await loadLessons(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
     try { await loadGram(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
-    if (split.rads.length) applyRads(split.rads);
+    if (src.rads.length) applyRads(src.rads);
     else if (state.cfg.lookup.tab) { try { state.words = fresh; await loadLookup(true); } catch (e) {} }
 
     const apply = () => {
@@ -3242,6 +3362,7 @@ async function doSync(silent) {
     }
   } catch (e) {
     toast('Đồng bộ hỏng: ' + e.message, 'err');
+    if (e.needsRemap) go('caidat');
   } finally {
     ico.classList.remove('is-spin');
   }
@@ -3404,6 +3525,7 @@ function bind() {
   };
   $('#btnSaveMap').onclick = saveMapping;
   $('#btnSaveDisplay').onclick = saveDisplayCfg;
+  $('#btnSaveSources').onclick = saveSources;
   $('#cfgWebApp').onchange = () => { state.cfg.webApp = $('#cfgWebApp').value.trim(); saveCfg(); };
   $('#cfgNew').onchange = () => { state.cfg.settings.newPerDay = +$('#cfgNew').value || 0; saveCfg(); };
   $('#cfgMaxRev').onchange = () => { state.cfg.settings.maxReview = +$('#cfgMaxRev').value || 120; saveCfg(); };

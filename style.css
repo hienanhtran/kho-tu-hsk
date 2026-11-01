@@ -461,6 +461,13 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 }
 .wcard__spk:hover{opacity:1; background:var(--accent-soft)}
 .wcard__dot{position:absolute; top:11px; left:11px; width:7px; height:7px; border-radius:50%}
+.wcard__chk{
+  position:absolute; bottom:8px; left:8px; width:16px; height:16px; border-radius:5px;
+  display:grid; place-items:center; font-size:10px; font-weight:800; line-height:1;
+}
+.wcard__chk.is-on{background:var(--jade-soft); color:var(--jade)}
+.wcard__chk.is-off{background:var(--gold-soft); color:var(--gold)}
+.chip.is-locked{opacity:.55; cursor:default}
 .dot-new{background:var(--faint); opacity:.5}
 .dot-learn{background:var(--gold); box-shadow:0 0 0 3px var(--gold-soft)}
 .dot-review{background:var(--jade); box-shadow:0 0 0 3px var(--jade-soft)}
