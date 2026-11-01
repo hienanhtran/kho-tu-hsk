@@ -155,7 +155,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '37';
+const APP_VER = '39';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2391,25 +2391,43 @@ function writePad(chu) {
     });
   };
 
+  // Chống tỳ tay (palm rejection) khi viết bằng Apple Pencil / bút cảm ứng:
+  // trong lúc đầu bút còn chạm mặt kính thì khoá cả dải nút phía trên, và
+  // bỏ qua mọi chạm "ngón tay/lòng bàn tay" có diện tích tiếp xúc quá to
+  // (đầu bút luôn báo width/height ~0, ngón tay ~15-25px, lòng bàn tay to hơn
+  // hẳn) — chỉ áp cho pointerType 'touch', bút và chuột không bị ảnh hưởng.
+  const NGUONG_TAY = 28;
+  let dangViet = false;
+  const laTayTi = e => e.pointerType === 'touch' &&
+    (dangViet || (e.width || 0) > NGUONG_TAY || (e.height || 0) > NGUONG_TAY);
+
   o.forEach(m => {
-    let dang = null;
+    let dang = null, dangId = null;
     const diem = e => {
       const r = m.cv.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
     m.cv.addEventListener('pointerdown', e => {
+      if (laTayTi(e) || dang) { e.preventDefault(); return; }
       e.stopPropagation(); e.preventDefault();
       try { m.cv.setPointerCapture(e.pointerId); } catch (x) {}
+      if (e.pointerType === 'pen') { dangViet = true; box.classList.add('wpad--viet'); }
+      dangId = e.pointerId;
       dang = [diem(e)];
       m.net.push(dang); luot.push(m);
       veLai(m);
     });
     m.cv.addEventListener('pointermove', e => {
-      if (!dang) return;
+      if (!dang || e.pointerId !== dangId) return;
       e.stopPropagation(); e.preventDefault();
       dang.push(diem(e)); veLai(m);
     });
-    const xong = e => { if (dang) { e.stopPropagation(); dang = null; } };
+    const xong = e => {
+      if (dang && e.pointerId === dangId) {
+        e.stopPropagation(); dang = null; dangId = null;
+        if (e.pointerType === 'pen') { dangViet = false; box.classList.remove('wpad--viet'); }
+      }
+    };
     m.cv.addEventListener('pointerup', xong);
     m.cv.addEventListener('pointercancel', xong);
   });
@@ -2419,8 +2437,9 @@ function writePad(chu) {
   }, [icon(ico, 15), nhan]);
   let demo = null;   // hộp hoạt ảnh mẫu, dựng khi bấm "Xem mẫu" lần đầu
 
+  // Nút đặt TRÊN ô viết, không đặt dưới: dưới ô là chỗ cổ tay/lòng bàn tay
+  // tì vào khi viết chữ bằng bút, dễ bấm nhầm nhất.
   const box = el('div', { class: 'wpad', onclick: e => e.stopPropagation() }, [
-    hang,
     el('div', { class: 'wpad__nut' }, [
       // lùi nét cuối cùng dù nó nằm ở ô nào
       nut('Lùi nét', 'left', () => {
@@ -2440,7 +2459,8 @@ function writePad(chu) {
         if (!demo) { toast('Không có hoạt ảnh cho chữ này', 'err'); return; }
         box.appendChild(demo);
       })
-    ])
+    ]),
+    hang
   ]);
   setTimeout(doKich, 0);
   window.addEventListener('resize', doKich);

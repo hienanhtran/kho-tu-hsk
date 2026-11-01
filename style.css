@@ -622,7 +622,7 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .q-py{color:var(--pink); font-size:30px; font-weight:700; letter-spacing:.01em}
 
 /* Ô tập viết chữ Hán */
-.wpad{margin-top:20px; display:grid; gap:10px; justify-items:center; width:100%}
+.wpad{margin-top:20px; display:grid; gap:10px; justify-items:center; width:100%; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none}
 /* Từ ghép mấy chữ thì bấy nhiêu ô, chia đều chiều ngang; số cột đặt bằng JS
    theo số chữ, quá 3 chữ thì tự xuống hàng. */
 .wpad__hang{display:grid; gap:10px; width:100%; margin:0 auto}
@@ -640,9 +640,14 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   position:relative; z-index:1; width:100%; height:100%; display:block;
   touch-action:none;            /* không thì kéo ngón tay là cuộn trang */
   cursor:crosshair;
+  /* chặn long-press iPad bôi đen / hiện menu "Sao chép, Tìm kiếm..." khi viết chữ */
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
 }
-.wpad__nut{display:flex; gap:8px}
+.wpad__nut{display:flex; gap:8px; transition:opacity .15s}
 .wpad__nut .btn{padding:7px 13px; font-size:12.5px}
+/* Lúc đầu bút còn chạm mặt kính (đang viết nét): khoá hẳn dải nút, chống
+   bấm nhầm khi cổ tay/lòng bàn tay tì lên trong lúc viết bằng Pencil. */
+.wpad--viet .wpad__nut{opacity:.4; pointer-events:none}
 
 /* Hoạt ảnh thứ tự nét (Hanzi Writer) — cùng kiểu khung với ô tập viết ở trên
    nhưng không bo khung chéo, vì đây là chữ mẫu, không phải chỗ để viết. */
