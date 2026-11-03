@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '48';
+const APP_VER = '49';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2199,7 +2199,7 @@ function showDetail(list, idx) {
   modalShell(w.isRad ? 'Chi tiết bộ thủ' : w.isPin ? 'Chi tiết âm tiết' : 'Chi tiết từ', body, foot);
 }
 
-function openWordForm(word) {
+function openWordForm(word, onSaved) {
   const cols = state.cfg.cols && state.cfg.cols.length
     ? state.cfg.cols
     : Object.keys((state.words[0] || { raw: {} }).raw);
@@ -2229,6 +2229,7 @@ function openWordForm(word) {
     if (word && state.cfg.map.duyet) row[state.cfg.map.duyet] = 'checked';
     close();
     await upsertWord(word ? word.id : '', row);
+    if (onSaved) onSaved();
   };
   close = modalShell(word ? 'Sửa từ' : 'Thêm từ mới', box, [
     el('button', { class: 'btn', text: 'Huỷ', onclick: () => close() }),
@@ -2588,10 +2589,35 @@ function drawCard() {
 
   $('#sessFill').style.width = Math.round(s.done / s.total * 100) + '%';
   $('#sessLeft').textContent = 'Còn ' + s.q.length + ' thẻ';
-  $('#cardBack').hidden = true; $('#rateBox').hidden = true; $('#btnFlip').hidden = false;
+  $('#cardBack').hidden = true; $('#cardBack').innerHTML = ''; $('#rateBox').hidden = true; $('#btnFlip').hidden = false;
   $('#card').classList.toggle('card--pin', !!w.isPin);
 
   const front = $('#cardFront'); front.innerHTML = '';
+
+  // "Học từ": không đố/lật thẻ — hiện luôn cả mặt sau (y hệt màn chi tiết ở
+  // Kho từ), kèm nút Sửa để chỉnh ngay khi đang học mà không phải thoát ra.
+  if (s._dir === 'xem') {
+    s.flipped = true;
+    $('#btnFlip').hidden = true;
+    front.appendChild(hanDoi(w));
+    front.appendChild(el('div', { class: 'detail__py', text: (w.isRad && w.r.name ? w.r.name + ' · ' : '') + w.f.pinyin }));
+    const vi = viBlock(w.f.nghiaViet);
+    if (vi) front.appendChild(vi);
+    front.appendChild(el('div', { class: 'detail__spk' }, [
+      el('button', { class: 'btn', onclick: e => { e.stopPropagation(); speak(spkText(w), w.f.audio); } }, [icon('volume'), 'Nghe phát âm'])
+    ]));
+    const bang = rawTable(w);
+    if (bang) front.appendChild(el('div', { class: 'a-full' }, [bang]));
+    if (hasWrite()) {
+      front.appendChild(el('button', {
+        class: 'btn', style: 'margin-top:14px',
+        onclick: e => { e.stopPropagation(); openWordForm(w, () => drawCard()); }
+      }, [icon('edit', 16), 'Sửa']));
+    }
+    drawRateButtons();
+    return;
+  }
+
   const coAudio = s._dir !== 'h2m' && s._dir !== 'm2h' && s._dir !== 'p2h';
   if (coAudio) {
     // Nghe rồi mới viết: icon + gợi ý "chạm để nghe lại" luôn giữ nguyên dù
@@ -3674,7 +3700,7 @@ function bind() {
   $('#card').onclick = () => {
     if (!state.sess) return;
     if (!state.sess.flipped) flipCard();
-    else if (state.sess._dir === 'a2m') speak(spkText(curWord()), curWord().f.audio);
+    else if (state.sess._dir === 'a2m' || state.sess._dir === 'xem') speak(spkText(curWord()), curWord().f.audio);
   };
   $('#btnQuit').onclick = quitSession;
   $('#btnBackDeck').onclick = renderHocSetup;
