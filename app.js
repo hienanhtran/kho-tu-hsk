@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '50';
+const APP_VER = '52';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2155,10 +2155,89 @@ function rawTable(w) {
   return el('table', { class: 'dtable' }, [el('tbody', {}, rows)]);
 }
 
+/* Dựng sẵn mọi ô nhập cho một từ — dùng chung cho form Thêm từ mới (vẫn là
+   popup, vì chưa có thẻ nào để sửa tại chỗ) lẫn sửa trực tiếp ngay trên thẻ
+   chi tiết/thẻ "Học từ" (không qua popup). Mỗi ô là textarea để giữ đúng
+   từng dòng y hệt trong Sheet (vd "Đặt câu" nhiều câu, mỗi câu một dòng). */
+function buildEditFields(word) {
+  const cols = state.cfg.cols && state.cfg.cols.length
+    ? state.cfg.cols
+    : Object.keys((state.words[0] || { raw: {} }).raw);
+  const AUTO = c => /^id$/i.test(c.trim()) || /^(stt|no\.?|số thứ tự|#)$/i.test(c.trim());
+  const autoCols = cols.filter(AUTO);
+  const inputs = {};
+  const box = el('div', {});
+  cols.forEach(c => {
+    if (AUTO(c)) return;
+    const val = word ? (word.raw[c] || '') : '';
+    const rows = Math.max(1, Math.min(10, (String(val).match(/\n/g) || []).length + 1));
+    const inp = el('textarea', { text: val, rows: rows });
+    inp.oninput = () => {
+      const n = Math.max(1, Math.min(10, (inp.value.match(/\n/g) || []).length + 1));
+      if (+inp.rows !== n) inp.rows = n;
+    };
+    inputs[c] = inp;
+    box.appendChild(el('label', { class: 'field field--block' }, [el('span', { class: 'field__lbl', text: c }), inp]));
+  });
+  return {
+    box: box, cols: cols, autoCols: autoCols,
+    getRow: () => { const row = {}; Object.keys(inputs).forEach(c => row[c] = inputs[c].value.trim()); return row; }
+  };
+}
+/* Gắn nút "Sửa" sửa trực tiếp tại chỗ (không mở popup): viewSlot thường
+   xuyên hiện rawTable(w), bấm Sửa thì thay bằng ô nhập ngay trong đó;
+   actionsSlot đổi nút Sửa thành Huỷ/Lưu. Lưu xong gọi onSaved() để nơi gọi
+   tự vẽ lại với dữ liệu mới (từ vựng vừa sửa không còn là bản cũ nữa).
+   Dùng chung cho cả thẻ chi tiết ở Kho từ lẫn thẻ "Học từ". */
+function mountInlineEdit(w, viewSlot, actionsSlot, onSaved) {
+  const paintView = () => { viewSlot.innerHTML = ''; const bang = rawTable(w); if (bang) viewSlot.appendChild(bang); };
+  paintView();
+  if (!hasWrite()) return paintView;
+
+  const btnEdit = el('button', { class: 'btn', onclick: e => { e.stopPropagation(); enter(); } }, [icon('edit', 16), 'Sửa']);
+  actionsSlot.appendChild(btnEdit);
+
+  function enter() {
+    const f = buildEditFields(w);
+    viewSlot.innerHTML = '';
+    viewSlot.appendChild(f.box);
+    actionsSlot.innerHTML = '';
+    actionsSlot.appendChild(el('button', { class: 'btn', text: 'Huỷ', onclick: e => { e.stopPropagation(); leave(); } }));
+    actionsSlot.appendChild(el('button', {
+      class: 'btn btn--primary', text: 'Lưu vào Sheet',
+      onclick: async e => {
+        e.stopPropagation();
+        const row = f.getRow();
+        const hCol = state.cfg.map.hanzi;
+        if (hCol && !row[hCol]) { toast('Chưa nhập chữ Hán', 'err'); return; }
+        // Sửa một từ đã có thì tự ghi "checked" vào cột duyệt (nếu có khai
+        // báo) để biết từ này đã được xem/sửa qua, khỏi phải tick tay trong
+        // Sheet.
+        if (state.cfg.map.duyet) row[state.cfg.map.duyet] = 'checked';
+        await upsertWord(w.id, row);
+        if (onSaved) onSaved();
+      }
+    }));
+  }
+  function leave() {
+    actionsSlot.innerHTML = '';
+    actionsSlot.appendChild(btnEdit);
+    paintView();
+  }
+  return paintView;
+}
+
 function showDetail(list, idx) {
   closeAllModals();
   const w = list[idx];
   const st = state.prog[w.id];
+
+  // rawTable(w) nằm trong viewSlot, bấm Sửa thì thay bằng ô nhập ngay tại
+  // chỗ — không mở popup riêng nữa. actionsSlot nằm ngay dưới, đổi nút Sửa
+  // thành Huỷ/Lưu khi đang sửa.
+  const viewSlot = el('div', {});
+  const actionsSlot = el('div', { class: 'row', style: 'margin-top:10px' });
+  mountInlineEdit(w, viewSlot, actionsSlot, () => { closeAllModals(); openDetail(w.id); });
 
   const body = el('div', { class: w.isPin ? 'detail--pin' : '' }, [
     el('div', { class: 'detail__top' }, [
@@ -2171,7 +2250,7 @@ function showDetail(list, idx) {
     ]),
     w.isPin ? drillTable(w) : null,
     w.isPin ? null : strokeSection(w.f.hanzi),
-    rawTable(w),
+    viewSlot, actionsSlot,
     w.isRad ? radBlock(w) : null,
     (w.isRad || w.isPin) ? null : el('div', { class: 'srsbox', html:
       '<b>' + esc(STATE_VI[wordState(w.id)]) + '</b>' +
@@ -2190,7 +2269,6 @@ function showDetail(list, idx) {
     el('button', { class: 'btn btn--icon', disabled: idx >= list.length - 1, onclick: () => showDetail(list, idx + 1) }, [icon('right')])
   ]));
   if (hasWrite()) {
-    foot.push(el('button', { class: 'btn', onclick: () => openWordForm(w) }, [icon('edit', 16), 'Sửa']));
     foot.push(el('button', {
       class: 'btn btn--danger',
       onclick: () => confirmBox('Xoá từ này?', 'Dòng "' + w.f.hanzi + '" sẽ bị xoá khỏi Google Sheet. Không khôi phục được.', 'Xoá', () => delWord(w), true)
@@ -2199,39 +2277,22 @@ function showDetail(list, idx) {
   modalShell(w.isRad ? 'Chi tiết bộ thủ' : w.isPin ? 'Chi tiết âm tiết' : 'Chi tiết từ', body, foot);
 }
 
-function openWordForm(word, onSaved) {
-  const cols = state.cfg.cols && state.cfg.cols.length
-    ? state.cfg.cols
-    : Object.keys((state.words[0] || { raw: {} }).raw);
-  const inputs = {};
-  const box = el('div', {});
-  // id do Sheet cấp, STT thì đánh số tiếp theo tự động — không bắt gõ tay
-  const AUTO = c => /^id$/i.test(c.trim()) || /^(stt|no\.?|số thứ tự|#)$/i.test(c.trim());
-  const autoCols = cols.filter(AUTO);
-  cols.forEach(c => {
-    if (AUTO(c)) return;
-    const inp = el('input', { type: 'text', value: word ? (word.raw[c] || '') : '' });
-    inputs[c] = inp;
-    box.appendChild(el('label', { class: 'field field--block' }, [el('span', { class: 'field__lbl', text: c }), inp]));
-  });
-  if (!word && autoCols.length) {
-    box.appendChild(el('p', { class: 'hint', style: 'margin-top:6px',
-      text: 'Cột ' + autoCols.join(' và ') + ' để Sheet tự điền, bạn không phải nhập.' }));
+/* Thêm từ mới vẫn là popup — chưa có thẻ chi tiết nào để sửa tại chỗ. */
+function openWordForm() {
+  const f = buildEditFields(null);
+  if (f.autoCols.length) {
+    f.box.appendChild(el('p', { class: 'hint', style: 'margin-top:6px',
+      text: 'Cột ' + f.autoCols.join(' và ') + ' để Sheet tự điền, bạn không phải nhập.' }));
   }
   let close;
   const save = async () => {
-    const row = {};
-    Object.keys(inputs).forEach(c => row[c] = inputs[c].value.trim());
+    const row = f.getRow();
     const hCol = state.cfg.map.hanzi;
     if (hCol && !row[hCol]) { toast('Chưa nhập chữ Hán', 'err'); return; }
-    // Sửa một từ đã có thì tự ghi "checked" vào cột duyệt (nếu có khai báo)
-    // để biết từ này đã được xem/sửa qua, khỏi phải tick tay trong Sheet.
-    if (word && state.cfg.map.duyet) row[state.cfg.map.duyet] = 'checked';
     close();
-    await upsertWord(word ? word.id : '', row);
-    if (onSaved) onSaved();
+    await upsertWord('', row);
   };
-  close = modalShell(word ? 'Sửa từ' : 'Thêm từ mới', box, [
+  close = modalShell('Thêm từ mới', f.box, [
     el('button', { class: 'btn', text: 'Huỷ', onclick: () => close() }),
     el('button', { class: 'btn btn--primary', text: 'Lưu vào Sheet', onclick: save })
   ]).close;
@@ -2615,14 +2676,13 @@ function drawCard() {
       const chu = Array.from(String(w.f.hanzi || ''));
       $$('.wpad__han', pad).forEach((n, k) => { n.textContent = chu[k] || ''; });
     }
-    const bang = rawTable(w);
-    if (bang) front.appendChild(el('div', { class: 'a-full' }, [bang]));
-    if (hasWrite()) {
-      front.appendChild(el('button', {
-        class: 'btn', style: 'margin-top:14px',
-        onclick: e => { e.stopPropagation(); openWordForm(w, () => drawCard()); }
-      }, [icon('edit', 16), 'Sửa']));
-    }
+    // Sửa trực tiếp tại thẻ, không mở popup — lưu xong vẽ lại đúng thẻ này
+    // với dữ liệu mới (findItem trong curWord() sẽ lấy bản đã cập nhật).
+    const viewSlot = el('div', { class: 'a-full' });
+    const actionsSlot = el('div', { style: 'margin-top:14px' });
+    front.appendChild(viewSlot);
+    front.appendChild(actionsSlot);
+    mountInlineEdit(w, viewSlot, actionsSlot, () => drawCard());
     drawRateButtons();
     return;
   }
@@ -3694,7 +3754,7 @@ function bind() {
     renderKho();
   };
   $('#filterState').onchange = renderKho;
-  $('#btnAdd').onclick = () => openWordForm(null);
+  $('#btnAdd').onclick = () => openWordForm();
   $$('.seg__btn').forEach(b => b.onclick = () => {
     stopSpeak();
     state.mode = b.getAttribute('data-mode');

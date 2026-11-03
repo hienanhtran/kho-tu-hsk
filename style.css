@@ -211,6 +211,7 @@ input[type=text],input[type=url],input[type=number],input[type=search],select,te
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
   transition:border-color .18s, box-shadow .18s, background .18s;
 }
+textarea{resize:vertical; line-height:1.5}
 .field:not(.field--block) select{width:auto; padding:9px 30px 9px 12px}
 input::placeholder{color:var(--faint)}
 input:focus,select:focus,textarea:focus{
