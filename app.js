@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '47';
+const APP_VER = '48';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -187,6 +187,9 @@ const PRESET = {
   webApp: 'https://script.google.com/macros/s/AKfycbz71rcOU1yPDlNIn684RPm191Kl948VnYor3lGlY0nLKOlmwmqzrQUN8du4atXe96Pl/exec'
 };
 const OLD_WEBAPP = 'https://script.google.com/macros/s/AKfycbzhMiV-ETPiGbcJYZvJdKrGI8-PSJepTXPRYEIDp7ywgQGCn3MDS7TBOkJjMNd0UamooA/exec';
+/* Sheet cũ chỉ có 1 tab Bài khoá tên này — máy nào đã lưu đúng mỗi giá trị
+   này (chưa từng tự tay đổi) thì coi là cấu hình cũ, cần nâng lên 3 tab mới. */
+const OLD_LESSON_TAB = 'Bài khoá';
 
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
@@ -280,7 +283,9 @@ function loadState() {
   // còn lưu link Web App cũ đã hỏng (deployment bị thay). Bổ sung/nâng cấp
   // cho đúng Sheet đó, nếu không tính năng mới sẽ im lặng không chạy.
   if (state.cfg.sheetId && state.cfg.sheetId === PRESET.sheetId) {
-    if (!state.cfg.lessonTabs.length && PRESET.lessonTabs && PRESET.lessonTabs.length) {
+    const lessonStale = !state.cfg.lessonTabs.length ||
+      (state.cfg.lessonTabs.length === 1 && state.cfg.lessonTabs[0] === OLD_LESSON_TAB);
+    if (lessonStale && PRESET.lessonTabs && PRESET.lessonTabs.length) {
       state.cfg.lessonTabs = PRESET.lessonTabs.slice();
       saveCfg();
     }
