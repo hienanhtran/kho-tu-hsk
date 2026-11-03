@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '49';
+const APP_VER = '50';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2606,6 +2606,15 @@ function drawCard() {
     front.appendChild(el('div', { class: 'detail__spk' }, [
       el('button', { class: 'btn', onclick: e => { e.stopPropagation(); speak(spkText(w), w.f.audio); } }, [icon('volume'), 'Nghe phát âm'])
     ]));
+    // Vẫn có ô tập viết như các kiểu học khác — đáp án hiện sẵn nên cho hiện
+    // luôn chữ mờ để soi nét, không cần đợi thao tác lật thẻ (vốn không có ở
+    // kiểu học này).
+    const pad = writePad(w.f.hanzi);
+    if (pad) {
+      front.appendChild(pad);
+      const chu = Array.from(String(w.f.hanzi || ''));
+      $$('.wpad__han', pad).forEach((n, k) => { n.textContent = chu[k] || ''; });
+    }
     const bang = rawTable(w);
     if (bang) front.appendChild(el('div', { class: 'a-full' }, [bang]));
     if (hasWrite()) {
