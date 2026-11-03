@@ -741,6 +741,9 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .rbtn--good:hover{background:var(--jade-soft)}
 .rbtn--easy{border-color:var(--blue-soft)}   .rbtn--easy b{color:var(--blue)}
 .rbtn--easy:hover{background:var(--blue-soft)}
+.rate--nav{grid-template-columns:repeat(2,1fr)}
+.rate--nav .rbtn{align-items:center; padding:13px 6px}
+.rate--nav .rbtn:hover{background:var(--accent-soft)}
 
 .done{text-align:center; padding:50px 20px}
 .done__ico{display:flex; justify-content:center; margin-bottom:14px; color:var(--accent)}

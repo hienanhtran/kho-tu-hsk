@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '52';
+const APP_VER = '53';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2683,7 +2683,7 @@ function drawCard() {
     front.appendChild(viewSlot);
     front.appendChild(actionsSlot);
     mountInlineEdit(w, viewSlot, actionsSlot, () => drawCard());
-    drawRateButtons();
+    drawXemNavButtons();
     return;
   }
 
@@ -2750,13 +2750,28 @@ function flipCard() {
 }
 function drawRateButtons() {
   const w = curWord(), st = getSrs(w.id);
-  const box = $('#rateBox'); box.innerHTML = '';
+  const box = $('#rateBox'); box.className = 'rate'; box.innerHTML = '';
   [['again', 'Lại', 1], ['hard', 'Khó', 2], ['good', 'Tốt', 3], ['easy', 'Dễ', 4]].forEach(r => {
     box.appendChild(el('button', { class: 'rbtn rbtn--' + r[0], onclick: () => rate(r[2]) }, [
       el('b', { text: r[1] }), el('span', { text: srsPreview(st, r[2]) })
     ]));
   });
   box.hidden = false;
+}
+/* "Học từ" không phải đố/ôn theo SRS nên không có 4 nút đánh giá — chỉ
+   lướt Trước/Tiếp qua các từ trong bộ đang học, không đụng tới lịch ôn. */
+function drawXemNavButtons() {
+  const box = $('#rateBox'); box.className = 'rate rate--nav'; box.innerHTML = '';
+  box.appendChild(el('button', { class: 'rbtn', onclick: () => xemNav(-1) }, [icon('left', 18), el('b', { text: 'Trước' })]));
+  box.appendChild(el('button', { class: 'rbtn', onclick: () => xemNav(1) }, [icon('right', 18), el('b', { text: 'Tiếp' })]));
+  box.hidden = false;
+}
+function xemNav(dir) {
+  const s = state.sess;
+  if (!s || s.q.length < 2) return;
+  if (dir > 0) s.q.push(s.q.shift());
+  else s.q.unshift(s.q.pop());
+  drawCard();
 }
 function rate(r) {
   const s = state.sess, w = curWord();
