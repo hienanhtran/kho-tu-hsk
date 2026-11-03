@@ -157,18 +157,18 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '43';
+const APP_VER = '47';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
   sheetId:  '1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds',
   tab:      'HSK 1',
-  // Nhiều Sheet mới tách riêng mỗi cấp HSK ra một tab — khai báo thêm ở đây
-  // (hoặc tick thêm trong Cài đặt) để gộp chung vào kho từ.
+  // Sheet đã tách riêng mỗi cấp HSK ra một tab (HSK 1/2/3) — chế độ auto sẽ
+  // tự gộp cả 3, đây chỉ là tab chính dùng để dò cột lúc khởi tạo lần đầu.
   sources:  ['HSK 1'],
-  // Tab Bộ thủ riêng (nếu Sheet đã tách khỏi bảng từ vựng). Để trống thì app
-  // vẫn tự dò bộ thủ nằm chung bảng từ vựng như trước.
-  radTab:   '',
+  sourcesMode: 'auto',
+  // Tab Bộ thủ riêng — Sheet đã tách khỏi bảng từ vựng.
+  radTab:   'Bộ thủ',
   // Cột nào là gì. Sheet đổi tên cột thì app tự dò lại nên không sợ hỏng.
   map: {
     hanzi: 'Chữ hán', pinyin: 'Pinyin', nghiaViet: 'Nghĩa', hsk: 'HSK',
@@ -176,18 +176,21 @@ const PRESET = {
     viDu: 'Đặt câu', ghiChu: 'Cách nhớ'
   },
   groupBy: ['Chủ đề', 'HSK', 'Từ loại', 'Bộ thủ'],
-  lessonTab: 'Bài khoá',
+  // Bài khoá cũng đã tách riêng theo từng cấp HSK.
+  lessonTabs: ['Bài khoá HSK 1', 'Bài khoá HSK 2', 'Bài khoá HSK 3'],
   gramTab: 'Ngữ pháp',
   logTab: 'Nhật ký học',
   /* Nhúng sẵn link Web App: máy nào mở cũng ghi và đọc lại được tiến độ, khỏi
      nhập tay từng máy. Bao giờ triển khai lại Apps Script (ra link mới) thì
-     đổi ở đây và nâng số bản. */
-  webApp: 'https://script.google.com/macros/s/AKfycbzhMiV-ETPiGbcJYZvJdKrGI8-PSJepTXPRYEIDp7ywgQGCn3MDS7TBOkJjMNd0UamooA/exec'
+     đổi ở đây và nâng số bản — cả OLD_WEBAPP bên dưới để tự nâng cấp cấu
+     hình cũ của những máy đã lưu link hỏng. */
+  webApp: 'https://script.google.com/macros/s/AKfycbz71rcOU1yPDlNIn684RPm191Kl948VnYor3lGlY0nLKOlmwmqzrQUN8du4atXe96Pl/exec'
 };
+const OLD_WEBAPP = 'https://script.google.com/macros/s/AKfycbzhMiV-ETPiGbcJYZvJdKrGI8-PSJepTXPRYEIDp7ywgQGCn3MDS7TBOkJjMNd0UamooA/exec';
 
 const DEFAULT_CFG = {
   sheetUrl: '', sheetId: '', tab: '', gid: '', webApp: '',
-  map: {}, cols: [], groupBy: [], lessonTab: '', gramTab: '', logTab: '', gids: {},
+  map: {}, cols: [], groupBy: [], lessonTab: '', lessonTabs: [], gramTab: '', logTab: '', gids: {},
   sources: [], sourcesMode: 'auto', allTabs: [], radTab: '',
   lookup: { tab: '', keyCol: '', varCol: '', valCol: '' },
   settings: { newPerDay: 10, maxReview: 120, dir: 'h2m', maxIvlDays: 365, voice: '', minGroup: 0, tts: 'auto', backAll: true }
@@ -218,6 +221,11 @@ function normalizeCfg(c) {
   }
   if (!Array.isArray(c.allTabs)) c.allTabs = [];
   if (typeof c.radTab !== 'string') c.radTab = '';
+  // lessonTab (1 tab, bản cũ) -> lessonTabs (nhiều tab, Sheet tách Bài khoá
+  // riêng theo từng cấp HSK như "Bài khoá HSK 1/2/3")
+  if (!Array.isArray(c.lessonTabs) || !c.lessonTabs.length) {
+    c.lessonTabs = c.lessonTab ? [c.lessonTab] : [];
+  }
   return c;
 }
 
@@ -259,27 +267,32 @@ function loadState() {
     state.cfg.sheetId = PRESET.sheetId;
     state.cfg.tab = PRESET.tab;
     state.cfg.sources = (PRESET.sources || [PRESET.tab]).slice();
-    state.cfg.sourcesMode = 'auto';
+    state.cfg.sourcesMode = PRESET.sourcesMode || 'auto';
     state.cfg.radTab = PRESET.radTab || '';
     state.cfg.map = Object.assign({}, PRESET.map);
     state.cfg.groupBy = PRESET.groupBy.slice();
-    state.cfg.lessonTab = PRESET.lessonTab || '';
+    state.cfg.lessonTabs = (PRESET.lessonTabs || []).slice();
     state.cfg.gramTab = PRESET.gramTab || '';
     state.cfg.logTab = PRESET.logTab || '';
     saveCfg();
   }
-  // Cấu hình đã lưu từ bản app cũ sẽ thiếu những khoá mới thêm về sau.
-  // Bổ sung cho đúng Sheet đó, nếu không tính năng mới sẽ im lặng không chạy.
+  // Cấu hình đã lưu từ bản app cũ sẽ thiếu những khoá mới thêm về sau, hoặc
+  // còn lưu link Web App cũ đã hỏng (deployment bị thay). Bổ sung/nâng cấp
+  // cho đúng Sheet đó, nếu không tính năng mới sẽ im lặng không chạy.
   if (state.cfg.sheetId && state.cfg.sheetId === PRESET.sheetId) {
-    if (!state.cfg.lessonTab && PRESET.lessonTab) {
-      state.cfg.lessonTab = PRESET.lessonTab;
+    if (!state.cfg.lessonTabs.length && PRESET.lessonTabs && PRESET.lessonTabs.length) {
+      state.cfg.lessonTabs = PRESET.lessonTabs.slice();
       saveCfg();
     }
     if (!state.cfg.gramTab && PRESET.gramTab) {
       state.cfg.gramTab = PRESET.gramTab;
       saveCfg();
     }
-    if (!state.cfg.webApp && PRESET.webApp) {
+    if (!state.cfg.radTab && PRESET.radTab) {
+      state.cfg.radTab = PRESET.radTab;
+      saveCfg();
+    }
+    if ((!state.cfg.webApp || state.cfg.webApp === OLD_WEBAPP) && PRESET.webApp) {
       state.cfg.webApp = PRESET.webApp;
       saveCfg();
     }
@@ -414,22 +427,18 @@ function moSheet(tab, dong) {
   if (!(state.cfg.gids || {})[tab]) toast('Mở tab "' + tab + '" ở cuối trang Sheet', 'ok');
   window.open(u, '_blank', 'noopener');
 }
-/* Hỏi Apps Script gid của các tab. Bản Apps Script cũ chưa trả gids thì thôi,
-   không báo lỗi — nút Sửa vẫn mở được Sheet. */
-async function pullGids() {
-  if (!hasWrite()) return;
-  const r = await callApi('ping', {});
-  if (!r || !r.gids) return;
-  state.cfg.gids = r.gids;
-  saveCfg();
-}
-
+/* Web App hỏng (deploy sai quyền, bị xoá…) thì mỗi lần gọi đều mất tới hơn
+   chục giây mới timeout — một lần đồng bộ gọi API nhiều lượt (ping, lấy tiến
+   độ…) sẽ cộng dồn thành cả phút, trông như treo. Hỏng một lần thì tạm "nghỉ"
+   2 phút, gọi tiếp trong lúc đó coi như hỏng luôn, khỏi chờ mạng lại. */
+let apiDownUntil = 0;
 /* Gọi Apps Script Web App. POST dùng text/plain để tránh preflight OPTIONS
    (Apps Script không xử lý OPTIONS → application/json sẽ luôn hỏng).
    Hỏng nữa thì rơi xuống JSONP GET — không đụng CORS. */
 async function callApi(action, payload) {
   const url = (state.cfg.webApp || '').trim();
   if (!url) throw new Error('Chưa khai báo Web App URL ở mục 3 phần Cài đặt');
+  if (Date.now() < apiDownUntil) throw new Error('Web App đang lỗi (thử lại sau ít phút)');
   const body = { action: action, tab: state.cfg.tab || '', gid: state.cfg.gid || '', payload: payload || {} };
   try {
     const r = await fetch(url, {
@@ -439,17 +448,24 @@ async function callApi(action, payload) {
     });
     const j = await r.json();
     if (!j || j.ok === false) throw new Error((j && j.error) || 'Apps Script báo lỗi');
+    apiDownUntil = 0;
     return j;
   } catch (e) {
-    const j = await jsonp(cb =>
-      url + (url.indexOf('?') > -1 ? '&' : '?') + 'callback=' + cb +
-      '&action=' + encodeURIComponent(action) +
-      '&tab=' + encodeURIComponent(state.cfg.tab || '') +
-      '&gid=' + encodeURIComponent(state.cfg.gid || '') +
-      '&payload=' + encodeURIComponent(JSON.stringify(payload || {})) +
-      '&_=' + Date.now());
-    if (!j || j.ok === false) throw new Error((j && j.error) || 'Apps Script báo lỗi');
-    return j;
+    try {
+      const j = await jsonp(cb =>
+        url + (url.indexOf('?') > -1 ? '&' : '?') + 'callback=' + cb +
+        '&action=' + encodeURIComponent(action) +
+        '&tab=' + encodeURIComponent(state.cfg.tab || '') +
+        '&gid=' + encodeURIComponent(state.cfg.gid || '') +
+        '&payload=' + encodeURIComponent(JSON.stringify(payload || {})) +
+        '&_=' + Date.now());
+      if (!j || j.ok === false) throw new Error((j && j.error) || 'Apps Script báo lỗi');
+      apiDownUntil = 0;
+      return j;
+    } catch (e2) {
+      apiDownUntil = Date.now() + 2 * MIN;
+      throw e2;
+    }
   }
 }
 const hasWrite = () => !!(state.cfg.webApp || '').trim();
@@ -1432,8 +1448,13 @@ const LESSON_FIELDS = [
   { key: 'note',   hints: ['ghi chú', 'note'] }
 ];
 
-function buildLessons(table) {
+/* tab truyền vào để: (1) gắn vào từng bài khoá, phục vụ nút "Sửa" mở đúng
+   tab trên Sheet (Sheet đã tách Bài khoá riêng theo từng cấp HSK); (2) suy
+   ra cấp HSK từ TÊN TAB khi trong tab không có cột HSK riêng (mỗi tab đã là
+   một cấp, không cần ghi lại). */
+function buildLessons(table, tab) {
   const m = guessCols(table.cols, LESSON_FIELDS);
+  const tabHsk = (String(tab || '').match(/(\d+)\s*$/) || [])[1] || '';
   const byKey = {};
   table.rows.forEach((r, i) => {
     const raw = {};
@@ -1442,9 +1463,9 @@ function buildLessons(table) {
     const han = g('han');
     if (!han) return;
     const bai = g('bai') || '?';
-    const hsk = g('hsk') || 'Khác';
-    const key = hsk + '|' + bai;
-    if (!byKey[key]) byKey[key] = { key: key, bai: bai, ten: g('ten'), hsk: hsk, dong: i + 2, lines: [] };
+    const hsk = g('hsk') || tabHsk || 'Khác';
+    const key = tab + '|' + hsk + '|' + bai;
+    if (!byKey[key]) byKey[key] = { key: key, bai: bai, ten: g('ten'), hsk: hsk, tab: tab, dong: i + 2, lines: [] };
     if (!byKey[key].ten && g('ten')) byKey[key].ten = g('ten');
     byKey[key].lines.push({
       thutu: +g('thutu') || (i + 1),
@@ -1454,15 +1475,23 @@ function buildLessons(table) {
   });
   const out = Object.keys(byKey).map(k => byKey[k]);
   out.forEach(l => l.lines.sort((a, b) => a.thutu - b.thutu));
-  out.sort((a, b) => a.hsk.localeCompare(b.hsk, 'vi') || (parseFloat(a.bai) || 0) - (parseFloat(b.bai) || 0));
   return out;
 }
 
+/* Gộp nhiều tab Bài khoá (Sheet tách riêng theo từng cấp HSK) — tab nào lỗi
+   (đổi tên, xoá) thì bỏ qua, các tab khác vẫn nạp bình thường. */
 async function loadLessons(silent) {
-  const tab = (state.cfg.lessonTab || '').trim();
-  if (!tab || !state.cfg.sheetId) return null;
-  const t = await readSheet(state.cfg.sheetId, tab, '');
-  state.lessons = buildLessons(t);
+  const tabs = (state.cfg.lessonTabs && state.cfg.lessonTabs.length) ? state.cfg.lessonTabs : [];
+  if (!tabs.length || !state.cfg.sheetId) return null;
+  const all = [];
+  for (const tab of tabs) {
+    try {
+      const t = await readSheet(state.cfg.sheetId, tab, '');
+      all.push.apply(all, buildLessons(t, tab));
+    } catch (e) { /* tab này lỗi thì bỏ qua, các tab khác vẫn nạp */ }
+  }
+  all.sort((a, b) => a.hsk.localeCompare(b.hsk, 'vi') || (parseFloat(a.bai) || 0) - (parseFloat(b.bai) || 0));
+  state.lessons = all;
   LS.set(K.lessons, state.lessons);
   if (!silent) toast('Đã nạp ' + state.lessons.length + ' bài khoá', 'ok');
   return state.lessons;
@@ -1770,7 +1799,7 @@ function renderLessons() {
   const box = $('#khoList');
   box.innerHTML = '';
   if (!state.lessons.length) {
-    const dangTai = !!(state.cfg.lessonTab || '').trim();
+    const dangTai = !!(state.cfg.lessonTabs && state.cfg.lessonTabs.length);
     box.appendChild(el('div', { class: 'empty' }, [
       el('div', { class: 'empty__ico' }, [icon(dangTai ? 'refresh' : 'inbox', 38)]),
       el('h3', { text: dangTai ? 'Đang tải bài khoá…' : 'Chưa có bài khoá' }),
@@ -1831,7 +1860,7 @@ function openLesson(L) {
     btnAll,
     el('button', {
       class: 'btn', title: 'Mở Google Sheet để sửa bài này',
-      onclick: () => moSheet(state.cfg.lessonTab, L.dong)
+      onclick: () => moSheet(L.tab || (state.cfg.lessonTabs || [])[0], L.dong)
     }, [icon('edit', 16), 'Sửa']),
     el('button', { class: 'btn', onclick: () => close() }, ['Đóng'])
   ]).close;
@@ -2891,7 +2920,10 @@ function fillSettings() {
   $('#lkTab').value = c.lookup.tab || '';
   $('#cfgRadTab').value = c.radTab || '';
   fillVoiceSelect();
-  renderSourceTabs();
+  // danh sách tab đã dò được từ phiên trước (lưu trong cfg) — hiện lại ngay,
+  // khỏi chờ ping lại mới thấy.
+  if (!lastTabList.length && c.allTabs && c.allTabs.length) fillTabList(c.allTabs);
+  else renderSourceTabs();
   if (state.rads.length) {
     setStatus($('#lookupStatus'),
       'Đã tìm thấy ' + state.rads.length + ' bộ thủ ngay trong bảng chính (các dòng có Chủ đề = "Bộ thủ") — không cần khai báo bảng tra ở đây.', 'ok');
@@ -2929,15 +2961,20 @@ function guessAuxTab(hints, tabs) {
   });
   return best;
 }
+/* Mọi tab khớp từ khoá (không chỉ tab đầu tiên) — Bài khoá có thể tách riêng
+   theo từng cấp HSK thành nhiều tab ("Bài khoá HSK 1/2/3"). */
+function guessAuxTabs(hints, tabs) {
+  return tabs.filter(t => hints.some(h => noAccent(t).indexOf(noAccent(h)) > -1));
+}
 /* Sheet chưa khai báo tab Bài khoá/Ngữ pháp (vd vừa đổi sang Sheet khác) thì
    thử đoán theo tên tab có sẵn trong file — khớp thì tự điền, không khớp thì
    thôi, người dùng vẫn gõ tay được ở mục "Gộp thêm tab khác". */
 function ensureAuxTabs(allTabs) {
   if (!allTabs || !allTabs.length) return;
   let changed = false;
-  if (!state.cfg.lessonTab) {
-    const g = guessAuxTab(LESSON_HINTS, allTabs);
-    if (g) { state.cfg.lessonTab = g; changed = true; }
+  if (!state.cfg.lessonTabs.length) {
+    const g = guessAuxTabs(LESSON_HINTS, allTabs);
+    if (g.length) { state.cfg.lessonTabs = g; changed = true; }
   }
   if (!state.cfg.gramTab) {
     const g = guessAuxTab(GRAM_HINTS, allTabs);
@@ -2950,7 +2987,7 @@ function ensureAuxTabs(allTabs) {
    tab này ra, còn lại coi là tab từ vựng, gộp hết. */
 function knownAuxTabs() {
   const set = {};
-  [state.cfg.lessonTab, state.cfg.gramTab, state.cfg.logTab, state.cfg.radTab, (state.cfg.lookup || {}).tab]
+  (state.cfg.lessonTabs || []).concat([state.cfg.gramTab, state.cfg.logTab, state.cfg.radTab, (state.cfg.lookup || {}).tab])
     .forEach(t => { t = String(t || '').trim(); if (t) set[t] = 1; });
   PHU_TAB.forEach(t => set[t] = 1);
   return set;
@@ -2958,14 +2995,22 @@ function knownAuxTabs() {
 /* Hỏi Apps Script toàn bộ tên tab trong file (chỉ cần có Web App, không cần
    bấm "Kiểm tra kết nối" riêng nữa) — cache lại để chế độ auto vẫn chạy được
    cả khi không gọi được Apps Script lúc đó (mất mạng, script lỗi…). */
+let lastDiscoverErr = '';
 async function discoverTabs(force) {
-  if (hasWrite() && (force || !state.cfg.allTabs || !state.cfg.allTabs.length)) {
+  if (!hasWrite()) { lastDiscoverErr = 'Chưa dán Web App URL ở mục 3.'; }
+  else if (force || !state.cfg.allTabs || !state.cfg.allTabs.length) {
     try {
       const r = await callApi('ping', {});
       state.cfg.allTabs = r.tabs || [];
+      if (r.gids) state.cfg.gids = r.gids;
+      lastDiscoverErr = '';
       saveCfg();
       fillTabList(state.cfg.allTabs);
-    } catch (e) { /* không gọi được thì dùng danh sách đã nhớ trước đó */ }
+    } catch (e) {
+      // không gọi được thì dùng danh sách đã nhớ trước đó (nếu có)
+      lastDiscoverErr = 'Không hỏi được Apps Script: ' + e.message +
+        '. Thường do deploy Web App chưa để "Who has access: Anyone" — vào Apps Script → Deploy → Manage deployments → sửa lại quyền → dán link /exec mới vào mục 3.';
+    }
   }
   return state.cfg.allTabs || [];
 }
@@ -2991,14 +3036,17 @@ function renderSourceTabs() {
   if (rAuto) rAuto.checked = !modeManual;
   if (rManual) rManual.checked = modeManual;
   if (rAuto && rManual) rAuto.onchange = rManual.onchange = () => { box.hidden = !rManual.checked; };
-  $('#cfgLessonTab').value = state.cfg.lessonTab || '';
+  $('#cfgLessonTabs').value = (state.cfg.lessonTabs || []).join(', ');
   $('#cfgGramTab').value = state.cfg.gramTab || '';
   const extra = $('#cfgExtraTabs'); if (extra) extra.value = '';
+  const dst = $('#srcDiscoverStatus');
+  if (dst) {
+    if (lastTabList.length) setStatus(dst, 'Đã dò được ' + lastTabList.length + ' tab trong file.', 'ok');
+    else setStatus(dst, (lastDiscoverErr || 'Chưa dò được danh sách tab trong file.') +
+      ' Trong lúc chưa dò được, gõ thẳng tên tab vẫn chạy được — chỉ lưu ý gõ đúng tên, vì gõ sai Google Sheet không báo lỗi mà lặng lẽ lấy nhầm tab khác.', 'err');
+  }
   box.hidden = !modeManual;
   box.innerHTML = '';
-  if (!lastTabList.length) {
-    box.appendChild(el('p', { class: 'hint', text: 'Chưa dò được danh sách tab trong file (cần nối Web App ở mục 3). Gõ thẳng tên tab vào ô bên dưới vẫn chạy được, chỉ lưu ý gõ đúng tên — gõ sai Google Sheet không báo lỗi mà lặng lẽ lấy nhầm tab khác.' }));
-  }
   const primary = (state.cfg.tab || '').trim();
   const chosen = new Set(state.cfg.sources && state.cfg.sources.length ? state.cfg.sources : (primary ? [primary] : []));
   const names = lastTabList.filter(t => PHU_TAB.indexOf(t) < 0);
@@ -3030,11 +3078,16 @@ function saveSources() {
     state.cfg.sources = picked;
   }
   state.cfg.radTab = $('#cfgRadTab').value.trim();
-  state.cfg.lessonTab = $('#cfgLessonTab').value.trim();
+  state.cfg.lessonTabs = ($('#cfgLessonTabs').value || '').split(',').map(s => s.trim()).filter(Boolean);
   state.cfg.gramTab = $('#cfgGramTab').value.trim();
   saveCfg();
   setStatus($('#sourcesStatus'), 'Đã lưu, đang tải lại dữ liệu…', 'info');
-  doSync(true);
+  doSync(true).then(() => {
+    setStatus($('#sourcesStatus'),
+      'Xong — hiện có ' + state.words.length + ' từ' + (state.rads.length ? ' và ' + state.rads.length + ' bộ thủ' : '') + '.',
+      'ok');
+    renderSourceTabs();
+  });
 }
 function setStatus(node, msg, kind) {
   node.className = 'status is-on ' + (kind || 'info');
@@ -3437,7 +3490,6 @@ async function doSync(silent) {
     if (hasWrite()) {
       try { await pullProgress(); } catch (e) {}
       try { await stampNewAt(); } catch (e) { /* thiếu tab nhật ký thì bỏ qua */ }
-      try { await pullGids(); } catch (e) { /* bản Apps Script cũ thì bỏ qua */ }
     }
     try { await loadLessons(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
     try { await loadGram(true); } catch (e) { /* thiếu tab thì bỏ qua */ }
