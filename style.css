@@ -707,14 +707,15 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .card--pin .a-vi .dvi__han{font-family:var(--han); font-size:34px}
 .card--pin .a-ex{font-family:var(--han); font-size:19px; text-align:center; color:var(--muted)}
 
-/* Thẻ có ví dụ dài làm trang cao lên; thanh nút phải ghim lại nếu không sẽ
-   bị thanh điều hướng dưới che mất trên điện thoại. */
+/* Thẻ có ví dụ dài làm trang cao lên. Thanh nút (Xem đáp án / Lại-Khó-Tốt-Dễ
+   / Trước-Tiếp) ghim lên ĐẦU trang, không ghim đáy như trước — ghim đáy nằm
+   đúng chỗ cổ tay hay tì vào khi viết chữ bằng Apple Pencil/bút cảm ứng
+   trong ô tập viết ở giữa thẻ, rất dễ chạm nhầm. Ghim trên vẫn luôn thấy nút
+   dù thẻ dài cỡ nào, mà lại tránh hẳn vùng tay cầm bút. */
 #hocSession{padding-bottom:6px}
-/* chừa chỗ cho thanh nút ghim đáy, không thì nó che mất nút Nghe ở cuối thẻ */
-#hocSession .card{padding-bottom:74px}
 #rateBox,#btnFlip{
-  position:sticky; z-index:6;
-  bottom:calc(var(--bar-h) + env(safe-area-inset-bottom) + 10px);
+  position:sticky; z-index:6; margin-bottom:14px;
+  top:calc(10px + env(safe-area-inset-top));
 }
 .rate{display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:12px}
 #rateBox{
@@ -815,8 +816,7 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
   .a-han{font-size:66px}
   .rate{gap:9px}
   .rbtn{padding:10px 8px}
-  #rateBox,#btnFlip{bottom:18px}
-  #hocSession .card{padding-bottom:86px}
+  #rateBox,#btnFlip{top:calc(var(--bar-h) + 10px)}
   .maprow{grid-template-columns:184px 1fr}
   .modal{max-width:580px}
   .panel{padding:24px}

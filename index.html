@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=53">
+<link rel="stylesheet" href="style.css?v=54">
 </head>
 <body>
 
@@ -112,12 +112,14 @@
         <button class="btn btn--icon" id="btnQuit" data-ico="x" title="Kết thúc phiên"></button>
         <span class="sess__left" id="sessLeft"></span>
       </div>
+      <!-- Thanh nút ghim trên đầu (không ghim đáy) để tránh đúng chỗ cổ tay
+           tì vào khi viết chữ bằng bút trong ô tập viết ở thẻ bên dưới. -->
+      <div class="rate" id="rateBox" hidden></div>
+      <button class="btn btn--primary btn--lg btn--block" id="btnFlip">Xem đáp án</button>
       <div class="card" id="card">
         <div class="card__front" id="cardFront"></div>
         <div class="card__back" id="cardBack" hidden></div>
       </div>
-      <div class="rate" id="rateBox" hidden></div>
-      <button class="btn btn--primary btn--lg btn--block" id="btnFlip">Xem đáp án</button>
     </div>
 
     <div id="hocDone" hidden>
@@ -331,6 +333,6 @@
      GIF hay cột nào trong Sheet — chỉ cần đúng chữ Hán đang có sẵn.
      Dữ liệu nét (JSON, vài KB/chữ) thư viện tự tải qua CDN khi cần. -->
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
-<script src="app.js?v=53"></script>
+<script src="app.js?v=54"></script>
 </body>
 </html>
