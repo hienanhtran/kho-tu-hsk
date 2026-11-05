@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '54';
+const APP_VER = '55';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -2656,14 +2656,14 @@ function drawCard() {
   const front = $('#cardFront'); front.innerHTML = '';
 
   // "Học từ": không đố/lật thẻ — hiện luôn cả mặt sau (y hệt màn chi tiết ở
-  // Kho từ), kèm nút Sửa để chỉnh ngay khi đang học mà không phải thoát ra.
+  // Kho từ). Không hiện lại khối "nghĩa" to ngay dưới chữ nữa vì nghĩa đã
+  // có sẵn trong bảng chi tiết bên dưới, hiện hai lần là thừa — thứ tự giờ
+  // là chữ → ô viết → thông tin chi tiết.
   if (s._dir === 'xem') {
     s.flipped = true;
     $('#btnFlip').hidden = true;
     front.appendChild(hanDoi(w));
     front.appendChild(el('div', { class: 'detail__py', text: (w.isRad && w.r.name ? w.r.name + ' · ' : '') + w.f.pinyin }));
-    const vi = viBlock(w.f.nghiaViet);
-    if (vi) front.appendChild(vi);
     front.appendChild(el('div', { class: 'detail__spk' }, [
       el('button', { class: 'btn', onclick: e => { e.stopPropagation(); speak(spkText(w), w.f.audio); } }, [icon('volume'), 'Nghe phát âm'])
     ]));
@@ -2676,14 +2676,13 @@ function drawCard() {
       const chu = Array.from(String(w.f.hanzi || ''));
       $$('.wpad__han', pad).forEach((n, k) => { n.textContent = chu[k] || ''; });
     }
-    // Sửa trực tiếp tại thẻ, không mở popup — lưu xong vẽ lại đúng thẻ này
-    // với dữ liệu mới (findItem trong curWord() sẽ lấy bản đã cập nhật).
     const viewSlot = el('div', { class: 'a-full' });
-    const actionsSlot = el('div', { style: 'margin-top:14px' });
     front.appendChild(viewSlot);
-    front.appendChild(actionsSlot);
-    mountInlineEdit(w, viewSlot, actionsSlot, () => drawCard());
-    drawXemNavButtons();
+    const bangView = rawTable(w);
+    if (bangView) viewSlot.appendChild(bangView);
+    // Nút Sửa gộp chung nhóm với Trước/Tiếp (ghim trên đầu) thay vì nằm
+    // riêng dưới thẻ — sửa xong vẽ lại đúng thẻ này với dữ liệu mới.
+    drawXemNavButtons(w, viewSlot);
     return;
   }
 
@@ -2725,19 +2724,13 @@ function flipCard() {
   if (w.isRad && w.r.name) back.appendChild(el('div', { class: 'a-name', text: w.r.name }));
   if (w.isPin) back.appendChild(el('div', { class: 'a-name', text: w.p.kind + ' · ' + w.p.group }));
   back.appendChild(el('div', { class: 'a-py', text: w.f.pinyin }));
-  if (s._dir !== 'm2h' && s._dir !== 'p2h') {
-    // Xếp theo dòng như thẻ chi tiết: dòng chữ Hán mới dùng font Hán, dòng
-    // tiếng Việt giữ font thường — để nguyên một khối thì cỡ chữ nhìn so le.
-    const vi = dongHan(w.f.nghiaViet);
-    vi.className = 'a-vi';
-    back.appendChild(vi);
-  }
   if (s._dir === 'a2m') back.appendChild(el('div', { class: 'a-han', text: w.f.hanzi }));
   back.appendChild(el('div', { class: 'detail__spk' }, [
     el('button', { class: 'btn', onclick: e => { e.stopPropagation(); speak(spkText(w), w.f.audio); } }, [icon('volume'), 'Nghe'])
   ]));
-  // Đủ mọi cột trong Sheet, y như khi bấm vào thẻ ở kho từ. Ví dụ và ghi chú
-  // nằm sẵn trong bảng nên không dựng riêng nữa, tránh hiện hai lần.
+  // Đủ mọi cột trong Sheet, y như khi bấm vào thẻ ở kho từ — nghĩa, ví dụ,
+  // ghi chú đều đã có sẵn trong bảng nên không dựng riêng ở trên nữa, tránh
+  // hiện trùng hai lần (phần chữ → ô viết → thông tin chi tiết bên dưới).
   const bang = rawTable(w);
   if (bang) back.appendChild(el('div', { class: 'a-full' }, [bang]));
   back.hidden = false;
@@ -2758,13 +2751,41 @@ function drawRateButtons() {
   });
   box.hidden = false;
 }
-/* "Học từ" không phải đố/ôn theo SRS nên không có 4 nút đánh giá — chỉ
-   lướt Trước/Tiếp qua các từ trong bộ đang học, không đụng tới lịch ôn. */
-function drawXemNavButtons() {
-  const box = $('#rateBox'); box.className = 'rate rate--nav'; box.innerHTML = '';
+/* "Học từ" không phải đố/ôn theo SRS nên không có 4 nút đánh giá — thay
+   bằng một nhóm Sửa/Trước/Tiếp ghim trên đầu (gộp chung một nhóm thay vì để
+   nút Sửa riêng dưới thẻ). detailSlot là chỗ rawTable(w) đang hiện, để Sửa
+   thay được bằng ô nhập ngay tại đó. */
+function drawXemNavButtons(w, detailSlot) {
+  const box = $('#rateBox');
+  const coSua = hasWrite();
+  box.className = 'rate rate--nav' + (coSua ? ' rate--nav3' : '');
+  box.innerHTML = '';
+  if (coSua) {
+    box.appendChild(el('button', { class: 'rbtn', onclick: () => enterXemEdit() }, [icon('edit', 16), el('b', { text: 'Sửa' })]));
+  }
   box.appendChild(el('button', { class: 'rbtn', onclick: () => xemNav(-1) }, [icon('left', 18), el('b', { text: 'Trước' })]));
   box.appendChild(el('button', { class: 'rbtn', onclick: () => xemNav(1) }, [icon('right', 18), el('b', { text: 'Tiếp' })]));
   box.hidden = false;
+
+  function enterXemEdit() {
+    const f = buildEditFields(w);
+    detailSlot.innerHTML = '';
+    detailSlot.appendChild(f.box);
+    box.className = 'rate rate--nav';
+    box.innerHTML = '';
+    box.appendChild(el('button', { class: 'rbtn', text: 'Huỷ', onclick: () => drawCard() }));
+    box.appendChild(el('button', {
+      class: 'rbtn rbtn--good', text: 'Lưu vào Sheet',
+      onclick: async () => {
+        const row = f.getRow();
+        const hCol = state.cfg.map.hanzi;
+        if (hCol && !row[hCol]) { toast('Chưa nhập chữ Hán', 'err'); return; }
+        if (state.cfg.map.duyet) row[state.cfg.map.duyet] = 'checked';
+        await upsertWord(w.id, row);
+        drawCard();
+      }
+    }));
+  }
 }
 function xemNav(dir) {
   const s = state.sess;

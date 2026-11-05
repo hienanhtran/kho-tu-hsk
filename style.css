@@ -743,6 +743,7 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .rbtn--easy{border-color:var(--blue-soft)}   .rbtn--easy b{color:var(--blue)}
 .rbtn--easy:hover{background:var(--blue-soft)}
 .rate--nav{grid-template-columns:repeat(2,1fr)}
+.rate--nav3{grid-template-columns:repeat(3,1fr)}
 .rate--nav .rbtn{align-items:center; padding:13px 6px}
 .rate--nav .rbtn:hover{background:var(--accent-soft)}
 
