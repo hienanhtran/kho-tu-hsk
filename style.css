@@ -570,10 +570,10 @@ code{background:var(--accent-soft); color:var(--accent); padding:2px 6px; border
 .diffsum{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px}
 
 /* ── Khai báo cột ─────────────────────────────────────── */
-.maprows{display:flex; flex-direction:column; gap:8px}
-.maprow{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
-.maprow__lbl{font-size:13.5px; font-weight:600; width:116px; flex:none}
-.maprow select{width:220px; max-width:100%; flex:none}
+.maprows{display:flex; flex-wrap:wrap; gap:8px 16px}
+.maprow{display:flex; align-items:center; gap:8px; flex:1 1 230px; max-width:280px}
+.maprow__lbl{font-size:12.5px; font-weight:600; width:82px; flex:none; line-height:1.2}
+.maprow select{flex:1; min-width:0; padding:8px 28px 8px 10px; border-radius:11px; font-size:13.5px}
 .maprow__lbl i{color:var(--pink); font-style:normal}
 .maprow--miss select{border-color:var(--pink); box-shadow:0 0 0 3px var(--pink-soft)}
 .chips{display:flex; gap:8px; flex-wrap:wrap}
