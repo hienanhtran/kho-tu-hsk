@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=59">
+<link rel="stylesheet" href="style.css?v=60">
 </head>
 <body>
 
@@ -210,11 +210,12 @@
       <p class="hint">Ghép từng mục của app với cột trong Sheet. Cột không ghép vẫn được giữ và hiện ở màn chi tiết.</p>
       <div id="mapRows" class="maprows"></div>
       <h4 class="sub">Cho phép nhóm theo</h4>
+      <p class="hint" style="margin-top:-6px">Nên chọn cột có ít giá trị lặp lại nhau (Chủ đề, HSK, Từ loại…) — cột nào mỗi từ một giá trị riêng (Pinyin, Đặt câu…) sẽ ra toàn nhóm 1 từ, nhìn như không gộp.</p>
       <div id="groupPick" class="chips"></div>
-      <h4 class="sub" id="colListTitle">Tất cả cột trong Sheet</h4>
-      <p class="hint">Cột nào cũng được đọc và hiện đủ ở màn chi tiết. Ghép vào một mục của app chỉ để app biết dùng nó ở thẻ, khi tìm kiếm và khi học.</p>
+      <button class="btn btn--primary" id="btnSaveMap" style="margin-top:16px">Lưu khai báo &amp; tải dữ liệu</button>
+      <h4 class="sub" id="colListTitle" style="margin-top:22px">Tất cả cột trong Sheet</h4>
+      <p class="hint">Chỉ để xem tham khảo — cột nào cũng được đọc và hiện đủ ở màn chi tiết dù không ghép ở trên.</p>
       <div id="colList" class="collist"></div>
-      <button class="btn btn--primary" id="btnSaveMap">Lưu khai báo &amp; tải dữ liệu</button>
     </div>
 
     <div class="panel" id="panelDisplay" hidden>
@@ -336,6 +337,6 @@
      GIF hay cột nào trong Sheet — chỉ cần đúng chữ Hán đang có sẵn.
      Dữ liệu nét (JSON, vài KB/chữ) thư viện tự tải qua CDN khi cần. -->
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
-<script src="app.js?v=59"></script>
+<script src="app.js?v=60"></script>
 </body>
 </html>
