@@ -157,7 +157,7 @@ const FIELDS = [
    ───────────────────────────────────────────────────────────────── */
 /* Phải khớp với version.json đặt cạnh index.html. Mỗi lần đưa bản mới lên
    thì đổi cả hai chỗ; app sẽ thấy lệch và mời người dùng cập nhật. */
-const APP_VER = '55';
+const APP_VER = '57';
 
 const PRESET = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1kKAr7Yd6kDt2z6k6On_WBRplEfZxHL77QKzXWuFk8ds/edit',
@@ -1485,6 +1485,16 @@ function buildLessons(table, tab) {
 
 /* Gộp nhiều tab Bài khoá (Sheet tách riêng theo từng cấp HSK) — tab nào lỗi
    (đổi tên, xoá) thì bỏ qua, các tab khác vẫn nạp bình thường. */
+/* Bộ thủ/Bài khoá/Ngữ pháp không có màn khai báo cột như từ vựng — chỉ tự
+   đoán theo từ khoá mỗi lần đồng bộ, không ai sửa lại được nếu đoán hỏng.
+   Tab còn dòng nhưng dựng ra 0 mục nghĩa là đoán cột thất bại hoàn toàn
+   (chắc do đổi tên cột khác quá xa từ khoá đang biết) — báo ngay để còn
+   sửa tên cột trong Sheet, không thì mất dữ liệu mà không biết. */
+function warnAuxMiss(label, tab, rowsLen, outLen) {
+  if (rowsLen > 0 && outLen === 0) {
+    toast(label + ' (tab "' + tab + '") có ' + rowsLen + ' dòng nhưng không đọc được mục nào — kiểm tra lại tên cột trong Sheet.', 'err');
+  }
+}
 async function loadLessons(silent) {
   const tabs = (state.cfg.lessonTabs && state.cfg.lessonTabs.length) ? state.cfg.lessonTabs : [];
   if (!tabs.length || !state.cfg.sheetId) return null;
@@ -1492,7 +1502,9 @@ async function loadLessons(silent) {
   for (const tab of tabs) {
     try {
       const t = await readSheet(state.cfg.sheetId, tab, '');
-      all.push.apply(all, buildLessons(t, tab));
+      const built = buildLessons(t, tab);
+      warnAuxMiss('Bài khoá', tab, t.rows.length, built.length);
+      all.push.apply(all, built);
     } catch (e) { /* tab này lỗi thì bỏ qua, các tab khác vẫn nạp */ }
   }
   all.sort((a, b) => a.hsk.localeCompare(b.hsk, 'vi') || (parseFloat(a.bai) || 0) - (parseFloat(b.bai) || 0));
@@ -1560,6 +1572,7 @@ async function loadGram(silent) {
   if (!tab || !state.cfg.sheetId) return null;
   const t = await readSheet(state.cfg.sheetId, tab, '');
   state.gram = buildGram(t);
+  warnAuxMiss('Ngữ pháp', tab, t.rows.length, state.gram.length);
   LS.set(K.gram, state.gram);
   if (!silent) toast('Đã nạp ' + state.gram.length + ' mục ngữ pháp', 'ok');
   return state.gram;
@@ -3172,9 +3185,10 @@ function renderSourceTabs() {
   if (rAuto) rAuto.checked = !modeManual;
   if (rManual) rManual.checked = modeManual;
   if (rAuto && rManual) rAuto.onchange = rManual.onchange = () => { box.hidden = !rManual.checked; };
-  $('#cfgLessonTabs').value = (state.cfg.lessonTabs || []).join(', ');
-  $('#cfgGramTab').value = state.cfg.gramTab || '';
   const extra = $('#cfgExtraTabs'); if (extra) extra.value = '';
+  renderChipGroup('lessonTabChips', 'cfgLessonTabs', (state.cfg.lessonTabs || []).slice(), { multi: true });
+  renderChipGroup('gramTabChips', 'cfgGramTab', state.cfg.gramTab ? [state.cfg.gramTab] : [], { multi: false });
+  renderChipGroup('radTabChips', 'cfgRadTab', state.cfg.radTab ? [state.cfg.radTab] : [], { multi: false });
   const dst = $('#srcDiscoverStatus');
   if (dst) {
     if (lastTabList.length) setStatus(dst, 'Đã dò được ' + lastTabList.length + ' tab trong file.', 'ok');
@@ -3201,6 +3215,46 @@ function renderSourceTabs() {
     box.appendChild(ch);
   });
 }
+/* Chọn tab bằng tick thay vì gõ tay, khi đã dò được danh sách tab (cần Web
+   App ở mục 3). Chưa dò được thì vẫn còn ô gõ tay làm phương án dự phòng —
+   renderChipGroup tự bật đúng cái đang dùng được. opts.multi: cho tick nhiều
+   tab (Bài khoá) hay chỉ 1 (Ngữ pháp/Bộ thủ, có thêm chip "Không có"). */
+function renderChipGroup(boxId, inputId, selected, opts) {
+  const box = $('#' + boxId);
+  const input = $('#' + inputId);
+  if (!box) return;
+  const names = lastTabList.filter(t => PHU_TAB.indexOf(t) < 0);
+  selected.forEach(t => { if (t && names.indexOf(t) < 0) names.push(t); });
+  if (!names.length) {
+    box.hidden = true; box.innerHTML = '';
+    if (input) { input.hidden = false; input.value = opts.multi ? selected.join(', ') : (selected[0] || ''); }
+    return;
+  }
+  if (input) input.hidden = true;
+  box.hidden = false;
+  box.innerHTML = '';
+  if (!opts.multi) {
+    const none = el('button', { type: 'button', class: 'chip' + (!selected.length ? ' is-on' : ''), text: '— Không có —' });
+    none.onclick = () => { $$('.chip', box).forEach(c => c.classList.remove('is-on')); none.classList.add('is-on'); };
+    box.appendChild(none);
+  }
+  names.forEach(t => {
+    const ch = el('button', { type: 'button', class: 'chip' + (selected.indexOf(t) > -1 ? ' is-on' : ''), text: t, 'data-tab': t });
+    ch.onclick = opts.multi
+      ? () => ch.classList.toggle('is-on')
+      : () => { $$('.chip', box).forEach(c => c.classList.remove('is-on')); ch.classList.add('is-on'); };
+    box.appendChild(ch);
+  });
+}
+function readChipGroup(boxId, inputId, multi) {
+  const box = $('#' + boxId);
+  if (box && !box.hidden) {
+    const picked = $$('#' + boxId + ' .chip.is-on[data-tab]').map(c => c.getAttribute('data-tab'));
+    return multi ? picked : (picked[0] || '');
+  }
+  const val = ($('#' + inputId).value || '').trim();
+  return multi ? val.split(',').map(s => s.trim()).filter(Boolean) : val;
+}
 function saveSources() {
   const mode = $('#srcModeManual').checked ? 'manual' : 'auto';
   state.cfg.sourcesMode = mode;
@@ -3213,9 +3267,9 @@ function saveSources() {
     if (primary && picked.indexOf(primary) < 0) picked.unshift(primary);
     state.cfg.sources = picked;
   }
-  state.cfg.radTab = $('#cfgRadTab').value.trim();
-  state.cfg.lessonTabs = ($('#cfgLessonTabs').value || '').split(',').map(s => s.trim()).filter(Boolean);
-  state.cfg.gramTab = $('#cfgGramTab').value.trim();
+  state.cfg.radTab = readChipGroup('radTabChips', 'cfgRadTab', false);
+  state.cfg.lessonTabs = readChipGroup('lessonTabChips', 'cfgLessonTabs', true);
+  state.cfg.gramTab = readChipGroup('gramTabChips', 'cfgGramTab', false);
   saveCfg();
   setStatus($('#sourcesStatus'), 'Đã lưu, đang tải lại dữ liệu…', 'info');
   doSync(true).then(() => {
@@ -3597,6 +3651,7 @@ async function readWordSources(allTabs) {
       const raw = {}; rt.cols.forEach((c, i) => { if (c) raw[c] = r[i] == null ? '' : r[i]; }); return raw;
     });
     const built = buildRadicals(rt.cols, rawRows, state.cfg.map);
+    warnAuxMiss('Bộ thủ', radTab, rt.rows.length, built.length);
     if (built.length) rads = embeddedRads.concat(built);
   }
   return { cols: cols || [], words: words, rads: rads };
